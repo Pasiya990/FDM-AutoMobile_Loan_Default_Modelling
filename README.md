@@ -22,11 +22,11 @@ This project is developed as part of the IT3051 – Fundamentals of Data Mining 
 
 ## 📊 Dataset
 
-**Dataset:** [Dataset Name]
+**Dataset:** Automobile Loan Default Dataset
 
-**Source:** [Dataset Source]
+**Source:** kaggle - https://www.kaggle.com/datasets/saurabhbagchi/dish-network-hackathon/data?select=Train_Dataset.csv
 
-**Target Variable:** [Target Variable]
+**Target Variable:** Default
 
 **Problem Type:** [Classification / Regression]
 
