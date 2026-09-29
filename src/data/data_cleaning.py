@@ -11,38 +11,20 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-RAW_DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "raw" / "Train_Dataset.csv"
-
-TARGET = "Default"
-ID_COL = "ID"
-
-# Columns found to be numeric but stored as text due to stray characters
-# ('$', 'x', '&', '#VALUE!', '@', '#') - see notebooks/01_data_understanding.ipynb
-NUMERIC_TEXT_COLS = [
-    "Client_Income",
-    "Credit_Amount",
-    "Loan_Annuity",
-    "Population_Region_Relative",
-    "Age_Days",
-    "Employed_Days",
-    "Registration_Days",
-    "ID_Days",
-    "Score_Source_3",
-]
-
-# Employed_Days sentinel: 365243 marks retired/unemployed applicants
-SENTINEL_COL = "Employed_Days"
-SENTINEL_VALUE = 365243
-SENTINEL_FLAG_COL = "Is_Retired_Or_Unemployed"
-
-# Corrupted numeric values found via EDA (exact value 100, should be <=1)
-CORRUPTED_ABOVE_ONE_COLS = ["Score_Source_2", "Population_Region_Relative"]
-
-CAR_AGE_COL = "car_age"
-HAS_CAR_AGE_COL = "has_car_age"
-CAR_OWNED_COL = "Car_Owned"
-
-RANDOM_STATE = 42
+from src.config import (
+    CAR_AGE_COL,
+    CAR_OWNED_COL,
+    CORRUPTED_ABOVE_ONE_COLS,
+    HAS_CAR_AGE_COL,
+    ID_COL,
+    NUMERIC_TEXT_COLS,
+    RANDOM_STATE,
+    RAW_DATA_PATH,
+    SENTINEL_COL,
+    SENTINEL_FLAG_COL,
+    SENTINEL_VALUE,
+    TARGET,
+)
 
 
 def load_raw_data(path: Path = RAW_DATA_PATH) -> pd.DataFrame:

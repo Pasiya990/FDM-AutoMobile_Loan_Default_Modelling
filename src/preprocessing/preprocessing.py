@@ -9,20 +9,13 @@ mirrors.
 import numpy as np
 import pandas as pd
 
-from src.data.data_cleaning import CAR_AGE_COL, TARGET
-
-SCORE_COLS = ["Score_Source_1", "Score_Source_2", "Score_Source_3"]
-
-MISSING_FLAG_THRESHOLD = 0.05
-
-# Left un-encoded here - rare-category grouping happens first, in
-# src/preprocessing/feature_engineering.py
-COLS_RESERVED_FOR_FEATURE_ENGINEERING = [
-    "Type_Organization",
-    "Client_Education",
-    "Client_Income_Type",
-    "Client_Occupation",
-]
+from src.config import (
+    CAR_AGE_COL,
+    COLS_RESERVED_FOR_FEATURE_ENGINEERING,
+    MISSING_FLAG_THRESHOLD,
+    SCORE_COLS,
+    TARGET,
+)
 
 
 def add_score_summary_features(

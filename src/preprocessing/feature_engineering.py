@@ -8,12 +8,13 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 
-from src.data.data_cleaning import TARGET
-from src.preprocessing.preprocessing import COLS_RESERVED_FOR_FEATURE_ENGINEERING
-
-RARE_CATEGORY_MIN_FREQ = 0.01  # categories below 1% of training rows -> "Other"
-LOW_IMPORTANCE_THRESHOLD = 0.001
-RANDOM_STATE = 42
+from src.config import (
+    COLS_RESERVED_FOR_FEATURE_ENGINEERING,
+    LOW_IMPORTANCE_THRESHOLD,
+    RANDOM_STATE,
+    RARE_CATEGORY_MIN_FREQ,
+    TARGET,
+)
 
 
 def group_rare_categories(
