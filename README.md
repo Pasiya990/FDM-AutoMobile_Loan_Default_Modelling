@@ -28,7 +28,7 @@ This project is developed as part of the IT3051 – Fundamentals of Data Mining 
 
 **Target Variable:** Default
 
-**Problem Type:** [Classification / Regression]
+**Problem Type:** Classification
 
 ## 🔍 Exploratory Data Analysis
 
