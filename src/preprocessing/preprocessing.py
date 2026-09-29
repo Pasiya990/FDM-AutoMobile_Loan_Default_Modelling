@@ -105,21 +105,29 @@ class IncomeLogTransformer(BaseEstimator, TransformerMixin):
 
 
 class CategoricalOneHotEncoder(BaseEstimator, TransformerMixin):
-    """One-hot encode object/string columns (excluding exclude_cols), with
-    the dummy-column set learned from train, so a single new row always
-    produces exactly the columns training produced - unseen categories, or
-    categories simply absent from this particular row, both come out as 0.
-    Reused for both the general categorical columns (preprocessing) and the
-    grouped Type_Organization/Client_Education/etc. columns (feature
-    engineering, after RareCategoryGrouper).
+    """One-hot encode categorical columns, with the dummy-column set learned
+    from train, so a single new row always produces exactly the columns
+    training produced - unseen categories, or categories simply absent from
+    this particular row, both come out as 0.
+
+    Pass `cols` to encode exactly those columns (used for the grouped
+    Type_Organization/Client_Education/etc. columns after RareCategoryGrouper),
+    or `exclude_cols` to encode every object/string column except those (used
+    for the general categorical columns). Reused for both.
     """
 
-    def __init__(self, exclude_cols=None):
+    def __init__(self, cols=None, exclude_cols=None):
+        self.cols = cols
         self.exclude_cols = exclude_cols
 
     def fit(self, X, y=None):
-        exclude = self.exclude_cols or []
-        self.cols_to_encode_ = [c for c in X.select_dtypes(include=["object", "string"]).columns if c not in exclude]
+        if self.cols is not None:
+            self.cols_to_encode_ = list(self.cols)
+        else:
+            exclude = self.exclude_cols or []
+            self.cols_to_encode_ = [
+                c for c in X.select_dtypes(include=["object", "string"]).columns if c not in exclude
+            ]
         dummies = pd.get_dummies(X, columns=self.cols_to_encode_, drop_first=True)
         self.output_columns_ = dummies.columns.tolist()
         return self
