@@ -1,5 +1,14 @@
 """Decision Tree Baseline Model
 Automobile Loan Default Prediction (SLIIT IT3051)
+
+Finding:
+- 5-fold CV: ROC-AUC = 0.708, PR-AUC = 0.181, Recall = 0.607, Precision = 0.152.
+- Test set: ROC-AUC = 0.706, PR-AUC = 0.173, Recall = 0.605, Precision = 0.147.
+- Catches ~60.5% of defaulters with balanced weights, but has high false alarms.
+
+Decision:
+- Saved to models/baseline/decision_tree.pkl as our interpretable non-linear baseline.
+- Exported as build_decision_tree_pipeline() and train_decision_tree().
 """
 
 import os
