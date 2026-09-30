@@ -43,6 +43,25 @@ def train_decision_tree(X_train, y_train, max_depth=6, min_samples_leaf=20):
     return model, train_time
 
 
+def build_decision_tree_pipeline(
+    max_depth: int = 6,
+    min_samples_leaf: int = 20,
+    random_state: int = 42,
+):
+    """Builds an end-to-end scikit-learn Pipeline with preprocessing and Decision Tree."""
+    from sklearn.pipeline import Pipeline
+    from src.preprocessing.feature_engineering import build_pipeline
+
+    return build_pipeline(
+        DecisionTreeClassifier(
+            max_depth=max_depth,
+            min_samples_leaf=min_samples_leaf,
+            class_weight="balanced",
+            random_state=random_state,
+        )
+    )
+
+
 def evaluate_decision_tree(model, X_test, y_test):
     """Evaluates the model on test data and returns metrics and confusion matrix."""
     # 1. Predict class labels (0 or 1)
