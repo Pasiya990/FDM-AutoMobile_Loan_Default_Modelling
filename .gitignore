@@ -16,6 +16,7 @@ data/processed/*
 __pycache__/
 *.py[cod]
 *.pyo
+.pytest_cache/
 
 .venv/
 venv/
@@ -49,3 +50,7 @@ models/**/*.joblib
 # =========================
 
 .DS_Store
+
+# Claude Code
+.claude/
+CLAUDE.md
