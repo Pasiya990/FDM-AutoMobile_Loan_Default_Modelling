@@ -45,3 +45,16 @@ def test_decision_tree_pipeline_fits_and_predicts(sample_data):
     proba = pipe.predict_proba(X.iloc[[0]])[:, 1][0]
     assert 0.0 <= proba <= 1.0
 
+
+def test_lightgbm_pipeline_fits_and_predicts(sample_data):
+    from src.models.lightgbm_model import build_lightgbm_pipeline
+
+    X, y = sample_data
+    pipe = build_lightgbm_pipeline(n_estimators=10)
+    pipe.fit(X, y)
+
+    assert "model" in pipe.named_steps
+    proba = pipe.predict_proba(X.iloc[[0]])[:, 1][0]
+    assert 0.0 <= proba <= 1.0
+
+
