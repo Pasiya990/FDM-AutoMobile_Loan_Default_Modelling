@@ -1,0 +1,2 @@
+model_name,cv_folds,threshold,roc_auc_mean,roc_auc_std,pr_auc_mean,pr_auc_std,recall_mean,precision_mean,f1_mean,fit_seconds,tn,fp,fn,tp
+XGBoost Baseline,5,0.5,0.763092667184099,0.004383368993355348,0.261403162701053,0.009896941420498172,0.022008736187266294,0.6217426018647355,0.04248848440419782,39.12,87542,106,7554,170
