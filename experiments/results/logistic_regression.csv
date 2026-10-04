@@ -1,0 +1,2 @@
+model_name,cv_folds,threshold,roc_auc_mean,roc_auc_std,pr_auc_mean,pr_auc_std,recall_mean,precision_mean,f1_mean,fit_seconds,tn,fp,fn,tp
+logistic_regression,5,0.5,0.73399808617906,0.005381837210492757,0.21163817963559292,0.005222188625539565,0.6684347804215504,0.15291519891273075,0.2488786000675094,57.96,59048,28600,2561,5163
