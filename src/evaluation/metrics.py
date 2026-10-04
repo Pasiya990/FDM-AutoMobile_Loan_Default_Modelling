@@ -42,6 +42,7 @@ def evaluate_model(
     summed confusion matrix, and total fit time - ready to log as one row
     via results_to_row().
     """
+    """stratified 5-fold cross validation"""
     skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=RANDOM_STATE)
 
     roc_aucs, pr_aucs, recalls, precisions, f1s = [], [], [], [], []
