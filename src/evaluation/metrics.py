@@ -6,6 +6,7 @@ src/models/ is scored with this same function, so notebook 06's comparison
 is apples to apples.
 """
 
+import os
 from time import perf_counter
 
 import numpy as np
@@ -90,3 +91,20 @@ def results_to_row(results: dict) -> pd.DataFrame:
     tn, fp, fn, tp = np.array(results["confusion_matrix"]).ravel()
     row.update({"tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp)})
     return pd.DataFrame([row])
+
+
+def log_result_to_csv(results: dict, path: str) -> pd.DataFrame:
+    """Appends one evaluate_model() result to the experiment log at `path`,
+    replacing any existing row for the same model_name first - so re-running
+    a notebook cell updates its row instead of accumulating duplicates.
+    Returns the full, updated log.
+    """
+    row = results_to_row(results)
+    if os.path.exists(path):
+        existing = pd.read_csv(path)
+        existing = existing[existing["model_name"] != results["model_name"]]
+        combined = pd.concat([existing, row], ignore_index=True)
+    else:
+        combined = row
+    combined.to_csv(path, index=False)
+    return combined

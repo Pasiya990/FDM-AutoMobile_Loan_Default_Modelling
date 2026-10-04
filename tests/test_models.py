@@ -34,11 +34,25 @@ def test_random_forest_pipeline_fits_and_predicts(sample_data):
     assert 0.0 <= proba <= 1.0
 
 
+
 def test_decision_tree_pipeline_fits_and_predicts(sample_data):
     from src.models.decision_tree import build_decision_tree_pipeline
 
     X, y = sample_data
     pipe = build_decision_tree_pipeline()
+    
+    pipe.fit(X, y)
+
+    assert "model" in pipe.named_steps
+    proba = pipe.predict_proba(X.iloc[[0]])[:, 1][0]
+    assert 0.0 <= proba <= 1.0
+
+def test_gaussian_naive_bayes_pipeline_fits_and_predicts(sample_data):
+    from src.models.gaussian_naive_bayes import build_gaussian_naive_bayes_pipeline
+
+    X, y = sample_data
+    pipe = build_gaussian_naive_bayes_pipeline()
+
     pipe.fit(X, y)
 
     assert "model" in pipe.named_steps
