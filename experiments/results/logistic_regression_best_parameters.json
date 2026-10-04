@@ -1,0 +1,5 @@
+{
+  "solver": "lbfgs",
+  "class_weight": null,
+  "C": 0.01
+}
