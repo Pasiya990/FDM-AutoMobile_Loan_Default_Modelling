@@ -46,6 +46,10 @@ SCORE_COLS = ["Score_Source_1", "Score_Source_2", "Score_Source_3"]
 # missing rate exceeds this threshold
 MISSING_FLAG_THRESHOLD = 0.05
 
+# Denominators in the ratio features: a zero or negative value would produce
+# infinity, so it is treated as missing and imputed instead
+POSITIVE_ONLY_COLS = ["Client_Income", "Loan_Annuity"]
+
 # Left un-encoded until feature engineering's rare-category grouping runs
 COLS_RESERVED_FOR_FEATURE_ENGINEERING = [
     "Type_Organization",

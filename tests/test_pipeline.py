@@ -13,6 +13,7 @@ same ones reported in notebooks 03/04 and verified during the refactor.
 import os
 import sys
 
+import numpy as np
 import pytest
 from sklearn.linear_model import LogisticRegression
 
@@ -167,3 +168,28 @@ def test_predicts_valid_probability_for_single_row(fitted_pipeline):
     single_row = X_test.iloc[[0]]
     proba = pipe.predict_proba(single_row)[:, 1][0]
     assert 0.0 <= proba <= 1.0
+
+
+@pytest.mark.parametrize("column", ["Client_Income", "Loan_Annuity"])
+def test_zero_denominator_is_imputed_not_infinite(fitted_pipeline, column):
+    # These columns are divided by in the ratio features; a zero must be
+    # treated as missing and filled, not turned into infinity.
+    pipe, _, X_test, *_ = fitted_pipeline
+    single_row = X_test.iloc[[0]].copy()
+    single_row[column] = 0
+
+    transformed = pipe[:-1].transform(single_row)
+    assert np.isfinite(transformed.to_numpy(dtype=float)).all()
+    assert 0.0 <= pipe.predict_proba(single_row)[:, 1][0] <= 1.0
+
+
+def test_missing_value_in_column_complete_in_training_is_filled(fitted_pipeline):
+    # Homephone_Tag has no missing values in training; a new application
+    # with it missing must still be filled before reaching the model.
+    pipe, X_train, X_test, *_ = fitted_pipeline
+    assert X_train["Homephone_Tag"].notna().all()
+    single_row = X_test.iloc[[0]].copy()
+    single_row["Homephone_Tag"] = np.nan
+
+    assert pipe[:-1].transform(single_row).isnull().sum().sum() == 0
+    assert 0.0 <= pipe.predict_proba(single_row)[:, 1][0] <= 1.0

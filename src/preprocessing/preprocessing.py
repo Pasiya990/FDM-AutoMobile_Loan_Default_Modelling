@@ -18,6 +18,7 @@ from src.config import (
     CAR_AGE_COL,
     COLS_RESERVED_FOR_FEATURE_ENGINEERING,
     MISSING_FLAG_THRESHOLD,
+    POSITIVE_ONLY_COLS,
     SCORE_COLS,
 )
 
@@ -44,26 +45,41 @@ class MissingValueImputer(BaseEstimator, TransformerMixin):
     for columns whose train missing rate exceeds flag_threshold (car_age
     excluded, since has_car_age already serves that purpose, and it's
     filled with 0, not the median). Categorical -> 'Missing' category.
+
+    A fill value is learned for every numeric column, not only those with
+    missing values in training, so a new application with a value missing
+    anywhere is still filled. Zero or negative values in POSITIVE_ONLY_COLS
+    are treated as missing, since they would divide by zero downstream.
     """
 
-    def __init__(self, flag_threshold: float = MISSING_FLAG_THRESHOLD):
+    def __init__(self, flag_threshold: float = MISSING_FLAG_THRESHOLD, positive_only_cols=None):
         self.flag_threshold = flag_threshold
+        self.positive_only_cols = positive_only_cols
+
+    def _positive_only(self, X):
+        cols = POSITIVE_ONLY_COLS if self.positive_only_cols is None else self.positive_only_cols
+        return [c for c in cols if c in X.columns]
 
     def fit(self, X, y=None):
-        numeric_cols_missing = [
-            c for c in X.select_dtypes(include=[np.number]).columns if c != "has_car_age" and X[c].isna().sum() > 0
-        ]
+        X = X.copy()
+        for col in self._positive_only(X):
+            X.loc[X[col] <= 0, col] = np.nan
+        numeric_cols = list(X.select_dtypes(include=[np.number]).columns)
         self.categorical_cols_missing_ = [
             c for c in X.select_dtypes(include=["object", "string"]).columns if X[c].isna().sum() > 0
         ]
         self.flag_cols_ = [
-            c for c in numeric_cols_missing if c != CAR_AGE_COL and X[c].isna().mean() > self.flag_threshold
+            c
+            for c in numeric_cols
+            if c not in (CAR_AGE_COL, "has_car_age") and X[c].isna().mean() > self.flag_threshold
         ]
-        self.fill_values_ = {c: (0 if c == CAR_AGE_COL else X[c].median()) for c in numeric_cols_missing}
+        self.fill_values_ = {c: (0 if c == CAR_AGE_COL else X[c].median()) for c in numeric_cols}
         return self
 
     def transform(self, X):
         X = X.copy()
+        for col in self._positive_only(X):
+            X.loc[X[col] <= 0, col] = np.nan
         for col in self.flag_cols_:
             X[col + "_was_missing"] = X[col].isna().astype(int)
         for col, fill_value in self.fill_values_.items():
