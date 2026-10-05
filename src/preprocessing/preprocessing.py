@@ -23,6 +23,24 @@ from src.config import (
 )
 
 
+class InputColumnValidator(BaseEstimator, TransformerMixin):
+    """Remembers the training input columns and raises one clear error
+    naming every missing column, instead of a KeyError deep in a later step
+    or a column silently filled with 0 by the encoder's reindex. Extra
+    columns are allowed and passed through.
+    """
+
+    def fit(self, X, y=None):
+        self.required_columns_ = list(X.columns)
+        return self
+
+    def transform(self, X):
+        missing = [c for c in self.required_columns_ if c not in X.columns]
+        if missing:
+            raise ValueError(f"Missing required input columns: {missing}")
+        return X
+
+
 class ScoreSummaryAdder(BaseEstimator, TransformerMixin):
     """score_mean/score_min/scores_available, computed before imputation so
     they reflect the genuine missingness pattern in Score_Source_1/2/3.
@@ -160,6 +178,7 @@ def build_preprocessing_steps() -> list[tuple[str, BaseEstimator]]:
     """The fit-on-train steps from notebook 03, sections 6-10, as (name,
     transformer) tuples ready to feed into an sklearn.Pipeline."""
     return [
+        ("input_validator", InputColumnValidator()),
         ("score_summary", ScoreSummaryAdder()),
         ("imputer", MissingValueImputer()),
         ("income_ratios", IncomeRatioAdder()),

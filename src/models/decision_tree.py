@@ -3,64 +3,43 @@ Automobile Loan Default Prediction (SLIIT IT3051)
 
 Finding:
 - 5-fold CV: ROC-AUC = 0.708, PR-AUC = 0.181, Recall = 0.607, Precision = 0.152.
-- Test set: ROC-AUC = 0.706, PR-AUC = 0.173, Recall = 0.605, Precision = 0.147.
-- Catches ~60.5% of defaulters with balanced weights, but has high false alarms.
+- Held-out test set, reference only: ROC-AUC = 0.719, PR-AUC = 0.186, Recall = 0.587, Precision = 0.163.
+- Catches about 61% of defaulters with balanced weights, but has many false alarms.
 
 Decision:
-- Saved to models/baseline/decision_tree.pkl as our interpretable non-linear baseline.
-- Exported as build_decision_tree_pipeline() and train_decision_tree().
+- Interpretable non-linear baseline, built with build_decision_tree_pipeline().
+- The fitted pipeline is saved to models/baseline/decision_tree.pkl by notebooks/decision_tree.ipynb.
 """
 
 import os
-import time
+
 import joblib
-import pandas as pd
-from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import (
     accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    roc_auc_score,
     average_precision_score,
     confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
 )
+from sklearn.tree import DecisionTreeClassifier
 
-
-def train_decision_tree(X_train, y_train, max_depth=6, min_samples_leaf=20):
-    """Initializes and trains a Decision Tree model.
-
-    Parameters:
-    - max_depth=6: Stops the tree from growing too deep (prevents overfitting).
-    - min_samples_leaf=20: Requires at least 20 applicants per leaf.
-    - class_weight='balanced': Gives more weight to defaulters (handles imbalanced data).
-    - random_state=42: Makes results reproducible.
-    """
-    # 1. Create the Decision Tree model
-    model = DecisionTreeClassifier(
-        max_depth=max_depth,
-        min_samples_leaf=min_samples_leaf,
-        class_weight="balanced",
-        random_state=42,
-    )
-
-    # 2. Record start time and fit the model on training data
-    start_time = time.time()
-    model.fit(X_train, y_train)
-    train_time = time.time() - start_time  # Training time in seconds
-
-    return model, train_time
+from src.config import RANDOM_STATE
+from src.preprocessing.feature_engineering import build_pipeline
 
 
 def build_decision_tree_pipeline(
     max_depth: int = 6,
     min_samples_leaf: int = 20,
-    random_state: int = 42,
+    random_state: int = RANDOM_STATE,
 ):
-    """Builds an end-to-end scikit-learn Pipeline with preprocessing and Decision Tree."""
-    from sklearn.pipeline import Pipeline
-    from src.preprocessing.feature_engineering import build_pipeline
+    """Builds an end-to-end scikit-learn Pipeline with preprocessing and Decision Tree.
 
+    - max_depth=6: stops the tree from growing too deep (prevents overfitting).
+    - min_samples_leaf=20: requires at least 20 applicants per leaf.
+    - class_weight='balanced': gives more weight to defaulters (handles imbalanced data).
+    """
     return build_pipeline(
         DecisionTreeClassifier(
             max_depth=max_depth,
@@ -113,28 +92,3 @@ def save_decision_tree_model(model, filepath="models/baseline/decision_tree.pkl"
     joblib.dump(model, filepath)
     print(f"Model saved to: {filepath}")
     return filepath
-
-
-if __name__ == "__main__":
-    # Quick test run from terminal: python src/models/decision_tree.py
-
-    # 1. Load preprocessed data
-    print("Loading data...")
-    X_train = joblib.load("data/processed/X_train.joblib")
-    y_train = joblib.load("data/processed/y_train.joblib")
-    X_test = joblib.load("data/processed/X_test.joblib")
-    y_test = joblib.load("data/processed/y_test.joblib")
-
-    # 2. Train the model
-    print("Training Decision Tree...")
-    model, train_time = train_decision_tree(X_train, y_train)
-    print(f"Done in {train_time:.2f} seconds.")
-
-    # 3. Evaluate on test set
-    print("Evaluating...")
-    metrics, cm = evaluate_decision_tree(model, X_test, y_test)
-    for k, v in metrics.items():
-        print(f"  {k}: {v}")
-
-    # 4. Save model to disk
-    save_decision_tree_model(model)
