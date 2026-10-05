@@ -72,3 +72,16 @@ def test_lightgbm_pipeline_fits_and_predicts(sample_data):
     assert 0.0 <= proba <= 1.0
 
 
+def test_lightgbm_pipeline_without_model_step_still_transforms(sample_data):
+    # pipe[:-1] ends with FeatureNameCleaner, which must count as fitted,
+    # and its output columns must match the features the model was trained on.
+    from src.models.lightgbm_model import build_lightgbm_pipeline
+
+    X, y = sample_data
+    pipe = build_lightgbm_pipeline(n_estimators=10)
+    pipe.fit(X, y)
+
+    transformed = pipe[:-1].transform(X.iloc[[0]])
+    assert list(transformed.columns) == list(pipe.named_steps["model"].feature_name_)
+
+

@@ -13,6 +13,7 @@ same ones reported in notebooks 03/04 and verified during the refactor.
 import os
 import sys
 
+import numpy as np
 import pytest
 from sklearn.linear_model import LogisticRegression
 
@@ -137,13 +138,14 @@ def test_single_new_row_uses_train_statistics_not_its_own(fitted_pipeline):
     # The whole point of fit/transform: a lone row has no data to compute a
     # median or a scaler mean from - it must reuse what fit() learned from
     # train, not silently recompute (or crash) on a single-row input.
-    # Checked right after the imputer step (index 1), before the scaler
-    # (further down the pipeline) transforms the value again.
+    # Checked right after the imputer step, before the scaler (further down
+    # the pipeline) transforms the value again.
     pipe, X_train, X_test, *_ = fitted_pipeline
     single_row = X_test.iloc[[0]].copy()
     single_row["Score_Source_1"] = None  # force a missing value
 
-    transformed = pipe[:2].transform(single_row)
+    through_imputer = [name for name, _ in pipe.steps].index("imputer") + 1
+    transformed = pipe[:through_imputer].transform(single_row)
     imputer = pipe.named_steps["imputer"]
     assert transformed["Score_Source_1"].iloc[0] == imputer.fill_values_["Score_Source_1"]
 
@@ -167,3 +169,38 @@ def test_predicts_valid_probability_for_single_row(fitted_pipeline):
     single_row = X_test.iloc[[0]]
     proba = pipe.predict_proba(single_row)[:, 1][0]
     assert 0.0 <= proba <= 1.0
+
+
+@pytest.mark.parametrize("column", ["Client_Income", "Loan_Annuity"])
+def test_zero_denominator_is_imputed_not_infinite(fitted_pipeline, column):
+    # These columns are divided by in the ratio features; a zero must be
+    # treated as missing and filled, not turned into infinity.
+    pipe, _, X_test, *_ = fitted_pipeline
+    single_row = X_test.iloc[[0]].copy()
+    single_row[column] = 0
+
+    transformed = pipe[:-1].transform(single_row)
+    assert np.isfinite(transformed.to_numpy(dtype=float)).all()
+    assert 0.0 <= pipe.predict_proba(single_row)[:, 1][0] <= 1.0
+
+
+def test_missing_required_columns_raise_clear_error(fitted_pipeline):
+    pipe, _, X_test, *_ = fitted_pipeline
+    single_row = X_test.iloc[[0]].drop(columns=["Child_Count", "Client_Income"])
+
+    with pytest.raises(ValueError, match="Missing required input columns") as error:
+        pipe.predict_proba(single_row)
+    assert "Child_Count" in str(error.value)
+    assert "Client_Income" in str(error.value)
+
+
+def test_missing_value_in_column_complete_in_training_is_filled(fitted_pipeline):
+    # Homephone_Tag has no missing values in training; a new application
+    # with it missing must still be filled before reaching the model.
+    pipe, X_train, X_test, *_ = fitted_pipeline
+    assert X_train["Homephone_Tag"].notna().all()
+    single_row = X_test.iloc[[0]].copy()
+    single_row["Homephone_Tag"] = np.nan
+
+    assert pipe[:-1].transform(single_row).isnull().sum().sum() == 0
+    assert 0.0 <= pipe.predict_proba(single_row)[:, 1][0] <= 1.0

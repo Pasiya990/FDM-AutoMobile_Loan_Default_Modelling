@@ -1,32 +1,40 @@
 """LightGBM Baseline Model
 Automobile Loan Default Prediction (SLIIT IT3051)
 
-Finding:
-- Test set: ROC-AUC = 0.748, PR-AUC = 0.215, Recall = 0.648, Precision = 0.168.
-- Catches ~64.8% of defaulters with scale_pos_weight=11.37, outperforming Decision Tree (60.5%).
-- Top predictive features: Credit_to_Annuity_Ratio, Mean_Bureau_Score, and Age_Days.
+Finding (5-fold stratified CV, shared pipeline, threshold 0.5):
+- Baseline: ROC-AUC = 0.748, PR-AUC = 0.228, Recall = 0.644, Precision = 0.168.
+- Tuned (notebooks/lightgbm.ipynb): ROC-AUC = 0.757, PR-AUC = 0.248, Recall = 0.560, Precision = 0.203.
+- scale_pos_weight lets it catch about 64% of defaulters at 0.5, with many false alarms.
 
 Decision:
-- Saved to models/baseline/lightgbm.pkl as our gradient boosting baseline.
-- Exported as build_lightgbm_pipeline(), train_lightgbm(), evaluate_lightgbm(), and save_lightgbm_model().
+- Gradient boosting baseline, built with build_lightgbm_pipeline().
 """
 
 import os
-import time
+
 import joblib
 import pandas as pd
 from lightgbm import LGBMClassifier
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.pipeline import Pipeline
 from sklearn.metrics import (
     accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    roc_auc_score,
     average_precision_score,
     confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
 )
+from sklearn.pipeline import Pipeline
+
+from src.config import RANDOM_STATE
+from src.preprocessing.feature_engineering import build_feature_engineering_steps
+from src.preprocessing.preprocessing import build_preprocessing_steps
+
+# Weight for the default class: approximates the training split's ratio of
+# non-defaulters to defaulters (87,648 / 7,724 = 11.35). Kept as a fixed
+# hyperparameter so the logged CV results stay reproducible.
+SCALE_POS_WEIGHT = 11.37
 
 
 def _clean_columns(df):
@@ -40,63 +48,35 @@ def _clean_columns(df):
 
 
 class FeatureNameCleaner(BaseEstimator, TransformerMixin):
-    """Pipeline transformer to sanitize feature names before passing data to LightGBM."""
+    """Pipeline transformer to sanitize feature names before passing data to LightGBM.
+
+    fit() records the cleaned column names so scikit-learn sees the step as
+    fitted; without a fitted attribute, a sliced pipeline ending here (for
+    example pipe[:-1]) is reported as not fitted.
+    """
 
     def fit(self, X, y=None):
+        self.output_columns_ = list(_clean_columns(X).columns)
         return self
 
     def transform(self, X):
         return _clean_columns(X)
 
 
-def train_lightgbm(
-    X_train,
-    y_train,
-    n_estimators: int = 100,
-    learning_rate: float = 0.05,
-    max_depth: int = 5,
-    scale_pos_weight: float = 11.37,
-):
-    """Initializes and trains a LightGBM gradient boosted tree model.
-
-    Parameters:
-    - n_estimators=100: Number of boosting trees to build.
-    - learning_rate=0.05: Step size shrinkage to prevent overfitting.
-    - max_depth=5: Limits tree depth to keep individual trees simple.
-    - scale_pos_weight=11.37: Balances 91.9% non-defaulters vs 8.1% defaulters.
-    """
-    # 1. Clean column names for LightGBM
-    X_train = _clean_columns(X_train)
-
-    # 2. Initialize the model
-    model = LGBMClassifier(
-        n_estimators=n_estimators,
-        learning_rate=learning_rate,
-        max_depth=max_depth,
-        scale_pos_weight=scale_pos_weight,
-        random_state=42,
-        verbose=-1,  # Suppress internal C++ logs
-    )
-
-    # 3. Fit on training data and measure training duration
-    start_time = time.time()
-    model.fit(X_train, y_train)
-    train_time = round(time.time() - start_time, 2)
-
-    return model, train_time
-
-
 def build_lightgbm_pipeline(
     n_estimators: int = 100,
     learning_rate: float = 0.05,
     max_depth: int = 5,
-    scale_pos_weight: float = 11.37,
-    random_state: int = 42,
+    scale_pos_weight: float = SCALE_POS_WEIGHT,
+    random_state: int = RANDOM_STATE,
 ):
-    """Builds an end-to-end scikit-learn Pipeline with preprocessing and LightGBM."""
-    from src.preprocessing.preprocessing import build_preprocessing_steps
-    from src.preprocessing.feature_engineering import build_feature_engineering_steps
+    """Builds an end-to-end scikit-learn Pipeline with preprocessing and LightGBM.
 
+    - n_estimators=100: number of boosting trees to build.
+    - learning_rate=0.05: step size shrinkage to prevent overfitting.
+    - max_depth=5: limits tree depth to keep individual trees simple.
+    - scale_pos_weight: balances non-defaulters vs defaulters (see SCALE_POS_WEIGHT).
+    """
     steps = (
         build_preprocessing_steps()
         + build_feature_engineering_steps()
@@ -158,31 +138,3 @@ def save_lightgbm_model(model, filepath="models/baseline/lightgbm.pkl"):
     joblib.dump(model, filepath)
     print(f"Model saved to: {filepath}")
     return filepath
-
-
-if __name__ == "__main__":
-    # Quick test run from terminal: python src/models/lightgbm_model.py
-
-    # 1. Load preprocessed datasets
-    print("Loading preprocessed data...")
-    X_train = joblib.load("data/processed/X_train.joblib")
-    y_train = joblib.load("data/processed/y_train.joblib")
-    X_test = joblib.load("data/processed/X_test.joblib")
-    y_test = joblib.load("data/processed/y_test.joblib")
-
-    # 2. Train the model
-    print("Training LightGBM model...")
-    model, train_time = train_lightgbm(X_train, y_train)
-    print(f"Trained in {train_time:.2f} seconds.")
-
-    # 3. Evaluate the model
-    print("Evaluating model...")
-    metrics, cm = evaluate_lightgbm(model, X_test, y_test)
-
-    # 4. Display results
-    print("\n--- LightGBM Results ---")
-    for k, v in metrics.items():
-        print(f"  {k}: {v}")
-
-    # 5. Save model to disk
-    save_lightgbm_model(model)
