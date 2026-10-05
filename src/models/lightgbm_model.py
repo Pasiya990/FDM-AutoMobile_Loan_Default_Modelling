@@ -11,7 +11,6 @@ Decision:
 """
 
 import os
-import time
 
 import joblib
 import pandas as pd
@@ -49,50 +48,19 @@ def _clean_columns(df):
 
 
 class FeatureNameCleaner(BaseEstimator, TransformerMixin):
-    """Pipeline transformer to sanitize feature names before passing data to LightGBM."""
+    """Pipeline transformer to sanitize feature names before passing data to LightGBM.
+
+    fit() records the cleaned column names so scikit-learn sees the step as
+    fitted; without a fitted attribute, a sliced pipeline ending here (for
+    example pipe[:-1]) is reported as not fitted.
+    """
 
     def fit(self, X, y=None):
+        self.output_columns_ = list(_clean_columns(X).columns)
         return self
 
     def transform(self, X):
         return _clean_columns(X)
-
-
-def train_lightgbm(
-    X_train,
-    y_train,
-    n_estimators: int = 100,
-    learning_rate: float = 0.05,
-    max_depth: int = 5,
-    scale_pos_weight: float = SCALE_POS_WEIGHT,
-):
-    """Initializes and trains a LightGBM gradient boosted tree model.
-
-    Parameters:
-    - n_estimators=100: Number of boosting trees to build.
-    - learning_rate=0.05: Step size shrinkage to prevent overfitting.
-    - max_depth=5: Limits tree depth to keep individual trees simple.
-    - scale_pos_weight: Balances non-defaulters vs defaulters (see SCALE_POS_WEIGHT).
-    """
-    # 1. Clean column names for LightGBM
-    X_train = _clean_columns(X_train)
-
-    # 2. Initialize the model
-    model = LGBMClassifier(
-        n_estimators=n_estimators,
-        learning_rate=learning_rate,
-        max_depth=max_depth,
-        scale_pos_weight=scale_pos_weight,
-        random_state=RANDOM_STATE,
-        verbose=-1,  # Suppress internal C++ logs
-    )
-
-    # 3. Fit on training data and measure training duration
-    start_time = time.time()
-    model.fit(X_train, y_train)
-    train_time = round(time.time() - start_time, 2)
-
-    return model, train_time
 
 
 def build_lightgbm_pipeline(
@@ -102,7 +70,13 @@ def build_lightgbm_pipeline(
     scale_pos_weight: float = SCALE_POS_WEIGHT,
     random_state: int = RANDOM_STATE,
 ):
-    """Builds an end-to-end scikit-learn Pipeline with preprocessing and LightGBM."""
+    """Builds an end-to-end scikit-learn Pipeline with preprocessing and LightGBM.
+
+    - n_estimators=100: number of boosting trees to build.
+    - learning_rate=0.05: step size shrinkage to prevent overfitting.
+    - max_depth=5: limits tree depth to keep individual trees simple.
+    - scale_pos_weight: balances non-defaulters vs defaulters (see SCALE_POS_WEIGHT).
+    """
     steps = (
         build_preprocessing_steps()
         + build_feature_engineering_steps()
