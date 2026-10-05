@@ -1,0 +1,2 @@
+model,target_recall,threshold,oof_recall,oof_precision,share_flagged
+random_forest,0.6,0.21,0.602,0.21,0.233
