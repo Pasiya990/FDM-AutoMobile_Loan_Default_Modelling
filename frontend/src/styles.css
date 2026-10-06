@@ -648,3 +648,158 @@ footer {
 .workspace .result-anchor {
   margin-top: 0;
 }
+
+/* ---------------------------------------------------------------- site header */
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.site-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 12px 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.brand > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.logo {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+
+.brand-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.brand-tagline {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.site-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.site-header nav a {
+  padding: 8px 14px;
+  border-radius: 6px;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.site-header nav a:hover {
+  background: var(--background);
+}
+
+.site-header nav a.active {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.site-header a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.page-intro h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+}
+
+.page-intro p {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- how-to-use page */
+.guide-page {
+  max-width: 860px;
+  padding: 8px 24px 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.guide-page h1 {
+  font-size: 1.5rem;
+}
+
+.guide-page h2 {
+  margin: 24px 0 8px;
+  font-size: 1.15rem;
+}
+
+.guide-page .lead {
+  font-size: 1.05rem;
+}
+
+.guide-page li {
+  margin: 6px 0;
+}
+
+.guide-table {
+  width: 100%;
+  margin: 12px 0;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.guide-table th,
+.guide-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+@media (max-width: 640px) {
+  .guide-page {
+    padding: 4px 14px 16px;
+  }
+
+  .guide-table thead {
+    display: none;
+  }
+
+  .guide-table tr {
+    display: block;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .guide-table th,
+  .guide-table td {
+    display: block;
+    padding: 2px 0;
+    border: none;
+  }
+}
+
+@media print {
+  .site-header nav {
+    display: none;
+  }
+}

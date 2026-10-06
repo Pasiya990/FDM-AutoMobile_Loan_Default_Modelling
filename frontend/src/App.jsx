@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import ApplicationForm from "./ApplicationForm.jsx";
-import { AboutModel, HowToUse } from "./Guide.jsx";
+import Header from "./Header.jsx";
+import HowToUsePage from "./HowToUsePage.jsx";
 import ResultPanel from "./ResultPanel.jsx";
 import { getExamples, getHealth, getSchema, predict } from "./api.js";
 import { FIELDS, WEEKDAYS, valueLabel } from "./fields.js";
+import useRoute from "./useRoute.js";
 import { DISABLED_WHEN, apiErrors, checkField, checkValues, fromApplication, toApplication } from "./formValues.js";
 
 const DISCLAIMER =
   "Academic prototype trained on a historical dataset. Decision support only: it must not be used to refuse an application automatically.";
 
 export default function App() {
+  const route = useRoute();
   const [health, setHealth] = useState(null);
   const [schema, setSchema] = useState(null);
   const [examples, setExamples] = useState([]);
@@ -125,79 +128,83 @@ export default function App() {
       });
   }
 
+  const onGuide = route === "/how-to-use";
   return (
-    <main className="page">
-      <header>
-        <h1>Vehicle Loan Risk Check</h1>
-        <p>
-          Enter an application to see how risky it looks compared with thousands of past vehicle-loan applicants.
-        </p>
-      </header>
-
-      <p className="disclaimer" role="note">
-        {DISCLAIMER}
-      </p>
-
-      {loadError && (
-        <p className="message error" role="alert">
-          {loadError}
-        </p>
-      )}
-      {!schema && !loadError && <p className="message">Connecting to the prediction service...</p>}
-
-      {schema && (
-        <>
-          <div className="guides">
-            <HowToUse />
-            <AboutModel schema={schema} />
+    <>
+      <Header route={onGuide ? "/how-to-use" : "/"} />
+      <main className="page">
+        {!onGuide && (
+          <div className="page-intro">
+            <h1>Check an application</h1>
+            <p>
+              Enter an application to see how risky it looks compared with thousands of past vehicle-loan applicants.
+              New to the tool? Read <a href="#/how-to-use">How to use</a>.
+            </p>
           </div>
+        )}
 
-          {examples.length > 0 && (
-            <div className="examples">
-              <span>Try an example:</span>
-              {examples.map((example) => (
-                <button key={example.label} type="button" className="secondary" onClick={() => loadExample(example)}>
-                  {example.label}
-                </button>
-              ))}
+        <p className="disclaimer" role="note">
+          {DISCLAIMER}
+        </p>
+
+        {loadError && (
+          <p className="message error" role="alert">
+            {loadError}
+          </p>
+        )}
+        {!schema && !loadError && <p className="message">Connecting to the prediction service...</p>}
+
+        {schema && onGuide && <HowToUsePage schema={schema} />}
+
+        {schema && !onGuide && (
+          <>
+            {examples.length > 0 && (
+              <div className="examples">
+                <span>Try an example:</span>
+                {examples.map((example) => (
+                  <button key={example.label} type="button" className="secondary" onClick={() => loadExample(example)}>
+                    {example.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="workspace">
+              <ApplicationForm
+                specs={schema.fields}
+                values={values}
+                errors={errors}
+                showSummary={showSummary}
+                summaryRef={summaryRef}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                onSubmit={handleSubmit}
+                onClear={handleClear}
+                busy={busy}
+              />
+
+              <aside className="result-column" aria-label="Result">
+                {result ? (
+                  <div ref={resultRef} tabIndex={-1} className="result-anchor">
+                    <ResultPanel
+                      result={result}
+                      bands={schema.risk_bands}
+                      details={enteredDetails()}
+                      onNewApplication={startNewApplication}
+                    />
+                  </div>
+                ) : (
+                  <p className="result-placeholder">
+                    {busy ? "Checking the application..." : "Fill in the form and press Check risk. The result appears here."}
+                  </p>
+                )}
+              </aside>
             </div>
-          )}
+          </>
+        )}
 
-          <div className="workspace">
-            <ApplicationForm
-              specs={schema.fields}
-              values={values}
-              errors={errors}
-              showSummary={showSummary}
-              summaryRef={summaryRef}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              onSubmit={handleSubmit}
-              onClear={handleClear}
-              busy={busy}
-            />
-
-            <aside className="result-column" aria-label="Result">
-              {result ? (
-                <div ref={resultRef} tabIndex={-1} className="result-anchor">
-                  <ResultPanel
-                    result={result}
-                    bands={schema.risk_bands}
-                    details={enteredDetails()}
-                    onNewApplication={startNewApplication}
-                  />
-                </div>
-              ) : (
-                <p className="result-placeholder">
-                  {busy ? "Checking the application..." : "Fill in the form and press Check risk. The result appears here."}
-                </p>
-              )}
-            </aside>
-          </div>
-        </>
-      )}
-
-      <footer>Model: {health?.model_version ?? "not connected"}</footer>
-    </main>
+        <footer>Model: {health?.model_version ?? "not connected"}</footer>
+      </main>
+    </>
   );
 }
