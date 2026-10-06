@@ -1,4 +1,4 @@
-"""API endpoints: GET /health, GET /schema, POST /predict.
+"""API endpoints: GET /health, GET /schema, GET /examples, POST /predict.
 
 /predict validates the application, converts it to the model's columns with the
 adapter, and scores it with the saved pipeline, which applies exactly the
@@ -6,12 +6,14 @@ preprocessing used in training. Errors follow the plan's format: 422 with
 per-field details for invalid input, 503 when the model is not loaded.
 """
 
+import json
 from datetime import datetime
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from backend.adapter import build_model_row
+from backend.examples import EXAMPLES_PATH
 from backend.messages import DISCLAIMER, PREDICTION_LABELS, SUGGESTED_ACTIONS
 from backend.validation import REQUIRED_FIELDS, field_specs, validate_request
 from src.models.risk_bands import risk_band
@@ -52,6 +54,14 @@ def schema(request: Request):
         "risk_bands": store.metadata["risk_bands"],
         "model_version": store.model_version,
     }
+
+
+@router.get("/examples")
+def examples():
+    """Demo applicants, one per risk band (built by python -m backend.examples)."""
+    if not EXAMPLES_PATH.exists():
+        return []
+    return json.loads(EXAMPLES_PATH.read_text(encoding="utf-8"))
 
 
 @router.post("/predict")
