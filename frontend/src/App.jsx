@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import ApplicationForm from "./ApplicationForm.jsx";
-import Header from "./Header.jsx";
+import Header, { Logo, PRODUCT_NAME } from "./Header.jsx";
 import HowToUsePage from "./HowToUsePage.jsx";
+import OverviewPage from "./OverviewPage.jsx";
 import ResultPanel from "./ResultPanel.jsx";
 import { getExamples, getHealth, getSchema, predict } from "./api.js";
 import { FIELDS, WEEKDAYS, valueLabel } from "./fields.js";
 import useRoute from "./useRoute.js";
 import { DISABLED_WHEN, apiErrors, checkField, checkValues, fromApplication, toApplication } from "./formValues.js";
-
-const DISCLAIMER =
-  "Academic prototype trained on a historical dataset. Decision support only: it must not be used to refuse an application automatically.";
 
 export default function App() {
   const route = useRoute();
@@ -22,6 +20,8 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [reference, setReference] = useState("");
+  const [stale, setStale] = useState(false);
   const resultRef = useRef(null);
   const summaryRef = useRef(null);
 
@@ -65,7 +65,8 @@ export default function App() {
       ...Object.fromEntries([field, ...dependants].map((f) => [f, undefined])),
       _form: undefined,
     }));
-    setResult(null);
+    // The last result stays on screen, marked out of date, until the officer checks again
+    if (result) setStale(true);
   }
 
   // Check a field as soon as the user leaves it
@@ -85,7 +86,11 @@ export default function App() {
     setBusy(true);
     try {
       const { status, body } = await predict(toApplication(values, schema.fields));
-      if (status === 200) setResult(body);
+      if (status === 200) {
+        const missingScores = ["score_source_1", "score_source_2", "score_source_3"].filter((f) => (values[f] ?? "") === "").length;
+        setResult({ ...body, checkedAt: new Date(), missingScores });
+        setStale(false);
+      }
       else showProblems({ ...apiErrors(body?.details), _form: "The service could not accept this application." });
     } catch (error) {
       showProblems({ _form: error.message });
@@ -95,6 +100,7 @@ export default function App() {
   }
 
   function loadExample(example) {
+    setStale(false);
     setValues(fromApplication(example.application, schema.fields));
     setErrors({});
     setShowSummary(false);
@@ -102,10 +108,22 @@ export default function App() {
   }
 
   function handleClear() {
+    setStale(false);
+    setReference("");
     setValues({});
     setErrors({});
     setShowSummary(false);
     setResult(null);
+  }
+
+  // Shown next to the progress in the action bar
+  function runStatus() {
+    if (busy) return { kind: "busy", text: "checking..." };
+    if (!result) return null;
+    const time = result.checkedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return stale
+      ? { kind: "stale", text: "details changed since the last check" }
+      : { kind: "fresh", text: `result updated ${time}` };
   }
 
   function startNewApplication() {
@@ -116,7 +134,7 @@ export default function App() {
 
   // The details entered, in form order and readable form, for the printed summary
   function enteredDetails() {
-    return Object.keys(FIELDS)
+    const entered = Object.keys(FIELDS)
       .filter((field) => (values[field] ?? "") !== "")
       .map((field) => {
         const raw = values[field];
@@ -126,52 +144,57 @@ export default function App() {
         else if (raw === "yes" || raw === "no") shown = raw === "yes" ? "Yes" : "No";
         return { label: FIELDS[field].label, value: shown };
       });
+    return reference.trim() ? [{ label: "Application reference", value: reference.trim() }, ...entered] : entered;
   }
 
-  const onGuide = route === "/how-to-use";
+  const page = route === "/overview" || route === "/how-to-use" ? route : "/";
   return (
     <>
-      <Header route={onGuide ? "/how-to-use" : "/"} />
-      <main className="page">
-        {!onGuide && (
-          <div className="page-intro">
-            <h1>Check an application</h1>
-            <p>
-              Enter an application to see how risky it looks compared with thousands of past vehicle-loan applicants.
-              New to the tool? Read <a href="#/how-to-use">How to use</a>.
-            </p>
-          </div>
-        )}
-
-        <p className="disclaimer" role="note">
-          {DISCLAIMER}
-        </p>
-
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
+      <Header route={page} health={health} loadError={loadError} />
+      <main className="page" id="main">
         {loadError && (
-          <p className="message error" role="alert">
-            {loadError}
-          </p>
+          <div className="message error" role="alert">
+            <strong>The prediction service is not available.</strong> {loadError} Start it with{" "}
+            <code>uvicorn backend.app:app</code> and reload this page.
+          </div>
         )}
         {!schema && !loadError && <p className="message">Connecting to the prediction service...</p>}
 
-        {schema && onGuide && <HowToUsePage schema={schema} />}
+        {schema && page === "/overview" && <OverviewPage schema={schema} />}
+        {schema && page === "/how-to-use" && <HowToUsePage schema={schema} />}
 
-        {schema && !onGuide && (
+        {schema && page === "/" && (
           <>
-            {examples.length > 0 && (
-              <div className="examples">
-                <span>Try an example:</span>
-                {examples.map((example) => (
-                  <button key={example.label} type="button" className="secondary" onClick={() => loadExample(example)}>
-                    {example.label}
-                  </button>
-                ))}
+            <div className="page-intro">
+              <div>
+                <p className="eyebrow">Step 1 · Enter the application</p>
+                <h1>New application</h1>
+                <p>
+                  Enter what you know when the application comes in. Nothing you enter is stored on the server. New here?
+                  Read <a href="#/how-to-use">How to use</a>.
+                </p>
               </div>
-            )}
+              {examples.length > 0 && (
+                <div className="examples">
+                  <span>Try an example:</span>
+                  {examples.map((example) => (
+                    <button key={example.label} type="button" className="chip" onClick={() => loadExample(example)}>
+                      {example.label.replace(" applicant", "")}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="workspace">
               <ApplicationForm
                 specs={schema.fields}
+                required={schema.required}
+                reference={reference}
+                onReference={setReference}
                 values={values}
                 errors={errors}
                 showSummary={showSummary}
@@ -181,30 +204,45 @@ export default function App() {
                 onSubmit={handleSubmit}
                 onClear={handleClear}
                 busy={busy}
+                status={runStatus()}
               />
 
               <aside className="result-column" aria-label="Result">
                 {result ? (
                   <div ref={resultRef} tabIndex={-1} className="result-anchor">
                     <ResultPanel
+                      key={result.checkedAt.getTime()}
+                      stale={stale}
                       result={result}
                       bands={schema.risk_bands}
                       details={enteredDetails()}
+                      reference={reference.trim()}
+                      checkedAt={result.checkedAt}
                       onNewApplication={startNewApplication}
                     />
                   </div>
                 ) : (
-                  <p className="result-placeholder">
-                    {busy ? "Checking the application..." : "Fill in the form and press Check risk. The result appears here."}
-                  </p>
+                  <div className="result-placeholder">
+                    <p className="eyebrow">Step 2 · Risk assessment</p>
+                    <p>{busy ? "Checking the application..." : "Fill in the key details and press Check risk. The result appears here."}</p>
+                  </div>
                 )}
               </aside>
             </div>
           </>
         )}
-
-        <footer>Model: {health?.model_version ?? "not connected"}</footer>
       </main>
+      <footer className="site-footer">
+        <div className="site-footer-inner">
+          <span className="footer-brand">
+            <Logo size={22} /> {PRODUCT_NAME} · IT3051 Fundamentals of Data Mining mini project
+          </span>
+          <span>
+            Statistical estimates from historical data; they can be wrong. Model {health?.model_version ?? "not connected"} ·{" "}
+            <a href="/docs">API documentation</a>
+          </span>
+        </div>
+      </footer>
     </>
   );
 }

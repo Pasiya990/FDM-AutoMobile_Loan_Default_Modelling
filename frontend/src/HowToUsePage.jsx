@@ -1,150 +1,174 @@
-// The "How to use" page: step-by-step instructions, how to read a result, and
-// what the model can and cannot do. Every figure comes from GET /schema.
+// "How to use": a quick guide in four steps, what each band means, and answers
+// to the questions officers ask most. Every figure comes from GET /schema.
 
 import { FIELDS } from "./fields.js";
 import { PRODUCT_NAME } from "./Header.jsx";
 
 const perHundred = (value) => Math.round(value * 100);
 
-function BandTable({ bands }) {
-  const low = bands.low_upper_bound.toFixed(2);
-  const high = bands.high_lower_bound.toFixed(2);
-  const rows = [
-    { band: "Low", scores: `below ${low}`, action: "Standard processing." },
-    { band: "Medium", scores: `${low} to ${high}`, action: "Standard review; verify any missing documents." },
+const BAND_ACTIONS = {
+  Low: "Standard processing.",
+  Medium: "Standard review; check any missing documents.",
+  High: "Refer to a senior credit officer; verify income; consider a guarantor or a larger down-payment.",
+};
+
+function steps(required) {
+  return [
     {
-      band: "High",
-      scores: `${high} or more`,
-      action: "Flagged: refer to a senior credit officer, verify income, consider a guarantor or larger down-payment.",
+      title: "Enter the application",
+      body: `Fill in the key details (${required.join(", ").toLowerCase()}). Add anything else you know. Not sure? Load one of the example applicants.`,
+    },
+    {
+      title: "Check the risk",
+      body: "Press Check risk. If something is missing or out of range, a red box lists each problem; click one to jump to it.",
+    },
+    {
+      title: "Read the result",
+      body: "The gauge shows the risk score and band. Why this score lists what pushed the risk up or down for this applicant.",
+    },
+    {
+      title: "Act on the band",
+      body: "Follow the suggested action: standard processing, a standard review, or a senior officer's review. The decision is yours.",
     },
   ];
-  return (
-    <table className="guide-table">
-      <thead>
-        <tr>
-          <th scope="col">Band</th>
-          <th scope="col">Risk score</th>
-          <th scope="col">Past applicants who defaulted</th>
-          <th scope="col">Suggested action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => {
-          const outcome = bands.outcomes?.[row.band];
-          return (
-            <tr key={row.band}>
-              <th scope="row">
-                <span className={`badge badge-${row.band.toLowerCase()}`}>{row.band} risk</span>
-              </th>
-              <td>{row.scores}</td>
-              <td>{outcome ? `about ${perHundred(outcome.default_rate)} in 100` : "-"}</td>
-              <td>{row.action}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
+}
+
+function questions(schema) {
+  const { performance, risk_bands: bands } = schema;
+  const low = bands.low_upper_bound.toFixed(2);
+  const high = bands.high_lower_bound.toFixed(2);
+  return [
+    {
+      q: "What does the risk score mean?",
+      a: `It ranks applicants from lower (0) to higher (1) risk compared with past applicants. It is not a percentage chance of default. Scores below ${low} are Low risk, ${low} to ${high} Medium, and ${high} or more High risk, which is the review line.`,
+    },
+    {
+      q: "Why can an applicant be Medium but \"not likely to default\"?",
+      a: `Only High-risk applications are flagged. Medium means the score is above the low-risk range but below the review line, so a standard review is enough. In the past, about ${perHundred(bands.outcomes?.Medium?.default_rate ?? 0)} in 100 Medium applicants defaulted.`,
+    },
+    {
+      q: "Which details matter most?",
+      a: "The three external credit scores carry the most weight. Without them the tool is much less accurate, so fill them in whenever a bureau record exists. The loan size compared with income and the time in the current job also matter.",
+    },
+    {
+      q: "What if I don't know some details?",
+      a: "Leave them as \"Not given\". The tool fills them the same way it did during training. Only the key details are required; the more you add, the more reliable the result.",
+    },
+    {
+      q: "An application looks fine but was flagged. Why?",
+      a: `Check Why this score: it shows the reasons. Remember that about ${perHundred(1 - performance.precision)} in 100 flagged applicants still repay. A flag means "check more closely", never "refuse".`,
+    },
+    {
+      q: "How reliable is it?",
+      a: `On past applications it had never seen, it flagged ${perHundred(performance.share_flagged)} in 100 applicants and caught about ${perHundred(performance.recall)} in every 100 who later defaulted. That is about ${(performance.recall / performance.share_flagged).toFixed(1)} times more than checking the same number at random.`,
+    },
+    {
+      q: "Is it fair to every applicant?",
+      a: "Younger applicants and women are flagged more often, partly because they defaulted more often in the historical data. A flag means about the same in every group, but review every flagged application on its own merits.",
+    },
+    {
+      q: "Is the application stored anywhere?",
+      a: `No. ${PRODUCT_NAME} scores the application and forgets it. Your reference number never leaves the browser. Use Copy summary or Print to keep a record.`,
+    },
+    {
+      q: "What do the \"days since ... changed\" fields mean?",
+      a: "How many days ago the applicant last changed their registration, identity document or phone number. Leave them blank if you do not know.",
+    },
+  ];
 }
 
 export default function HowToUsePage({ schema }) {
-  const { performance, risk_bands: bands } = schema;
-  const required = schema.required.map((field) => FIELDS[field]?.label ?? field);
+  const required = schema.required.map((field) => FIELDS[field]?.label.replace(" (years)", "") ?? field);
+  const bands = schema.risk_bands;
+  const low = bands.low_upper_bound.toFixed(2);
+  const high = bands.high_lower_bound.toFixed(2);
+  const bandRows = [
+    { band: "Low", scores: `below ${low}` },
+    { band: "Medium", scores: `${low} to ${high}` },
+    { band: "High", scores: `${high} or more` },
+  ];
 
   return (
-    <article className="guide-page">
-      <h1>How to use the {PRODUCT_NAME}</h1>
-      <p className="lead">
-        The tool helps loan officers decide which vehicle-loan applications need a closer look. It compares an
-        application with about {schema.training_rows.toLocaleString()} past applications whose outcome is known.
-        It supports your decision; it never approves or refuses an application.
-      </p>
-
-      <section>
-        <h2>1. Enter the application</h2>
-        <ol>
-          <li>
-            Open <a href="#/">Check an application</a>.
-          </li>
-          <li>
-            Fill in the <strong>Key details</strong>: {required.join(", ")}. If the applicant is employed, also give
-            their years in the current job.
-          </li>
-          <li>
-            Add any other details you know. Leave unknown answers as "Not given": the model handles missing
-            information.
-          </li>
-          <li>
-            Fill in the <strong>external credit scores</strong> whenever a bureau record exists. They are the strongest
-            signal the model has, so results without them are less reliable.
-          </li>
-          <li>
-            To see how the tool works first, press one of the <strong>Try an example</strong> buttons. Each fills the
-            form with a real past application.
-          </li>
-        </ol>
-      </section>
-
-      <section>
-        <h2>2. Check the risk</h2>
-        <p>
-          Press <strong>Check risk</strong>. If something is missing or out of range, a red box at the top lists every
-          problem; click a problem to jump to that field. Fields are also checked as soon as you leave them. Some
-          answers switch other fields off: for example, "Not employed or retired" disables the years in job.
+    <div className="guide">
+      <section className="guide-intro">
+        <p className="eyebrow">Quick guide</p>
+        <h1>How to use {PRODUCT_NAME}</h1>
+        <p className="lead">
+          Four steps, under a minute per application. {PRODUCT_NAME} supports your decision; it never approves or refuses an
+          application.
         </p>
+        <a className="button" href="#/">
+          Start a new application
+        </a>
       </section>
 
-      <section>
-        <h2>3. Read the result</h2>
-        <ul>
-          <li>
-            <strong>Risk band</strong>: Low, Medium or High, shown in words and colour.
+      <ol className="step-cards guide-steps">
+        {steps(required).map((step, i) => (
+          <li className="step-card" key={step.title}>
+            <span className="step-number" aria-hidden="true">
+              {i + 1}
+            </span>
+            <h3>
+              <span className="visually-hidden">Step {i + 1}: </span>
+              {step.title}
+            </h3>
+            <p>{step.body}</p>
           </li>
-          <li>
-            <strong>Risk score</strong> from 0 to 1. It ranks applicants from lower to higher risk; it is not the chance
-            of default.
-          </li>
-          <li>
-            <strong>Main factors</strong>: the parts of the application that moved the score most, and whether each
-            raised or lowered the risk. They explain the model's score, not the causes of default.
-          </li>
-          <li>
-            <strong>Suggested action</strong> for the band.
-          </li>
-        </ul>
-        <BandTable bands={bands} />
-        <p>
-          Use <strong>Print summary</strong> to keep a copy of the result and the details entered, and{" "}
-          <strong>Start a new application</strong> to clear the form.
-        </p>
+        ))}
+      </ol>
+
+      <section className="panel">
+        <p className="eyebrow">Reading the result</p>
+        <h2>What each band means</h2>
+        <table className="guide-table">
+          <thead>
+            <tr>
+              <th scope="col">Band</th>
+              <th scope="col">Risk score</th>
+              <th scope="col">Past applicants who defaulted</th>
+              <th scope="col">What to do</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bandRows.map(({ band, scores }) => {
+              const outcome = bands.outcomes?.[band];
+              return (
+                <tr key={band}>
+                  <th scope="row">
+                    <span className={`badge badge-${band.toLowerCase()}`}>{band} risk</span>
+                  </th>
+                  <td data-label="Risk score">{scores}</td>
+                  <td data-label="Past applicants who defaulted">{outcome ? `about ${perHundred(outcome.default_rate)} in 100` : "not available"}</td>
+                  <td data-label="What to do">{BAND_ACTIONS[band]}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </section>
 
-      <section>
-        <h2>4. How reliable is it?</h2>
-        <p>
-          On past applications it had not seen before, the tool flagged {perHundred(performance.share_flagged)} in
-          every 100 applicants and caught about {perHundred(performance.recall)} in every 100 who later defaulted.
-          About {perHundred(performance.precision)} in every 100 flagged applicants defaulted, so most flagged
-          applicants still repay: a flag means <em>check more closely</em>, not <em>refuse</em>.
-        </p>
+      <section className="panel">
+        <p className="eyebrow">Questions</p>
+        <h2>Common questions</h2>
+        <div className="faq">
+          {questions(schema).map(({ q, a }) => (
+            <details className="faq-item" key={q}>
+              <summary>{q}</summary>
+              <p>{a}</p>
+            </details>
+          ))}
+        </div>
       </section>
 
-      <section>
-        <h2>5. Use it responsibly</h2>
-        <ul>
-          <li>The final decision is always made by a person. Never refuse an application only because it is flagged.</li>
-          <li>
-            Some groups, for example younger applicants, are flagged more often, partly because they defaulted more
-            often in the historical data. Review flagged applications on their merits.
-          </li>
-          <li>
-            The model was trained on a public historical dataset whose source and period are not documented, so it
-            may not reflect today's applicants.
-          </li>
+      <section className="panel responsible">
+        <p className="eyebrow">Responsible use</p>
+        <h2>Keep in mind</h2>
+        <ul className="check-list">
+          <li>A person makes every decision. Never refuse an application only because it is flagged.</li>
+          <li>Results are estimates from historical data of an undocumented source and period; they can be wrong.</li>
+          <li>If the result surprises you, read Why this score and check the details you entered.</li>
         </ul>
       </section>
-
-      <p className="muted">Model: {schema.model_version}</p>
-    </article>
+    </div>
   );
 }

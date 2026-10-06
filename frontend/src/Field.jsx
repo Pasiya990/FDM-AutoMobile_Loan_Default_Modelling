@@ -6,7 +6,7 @@ function hint(spec) {
   return `Typical: ${formatNumber(spec.typical_min)} to ${formatNumber(spec.typical_max)}`;
 }
 
-export default function Field({ name, spec, value, error, disabled, onChange, onBlur }) {
+export default function Field({ name, spec, value, error, warning, disabled, onChange, onBlur }) {
   const info = FIELDS[name] ?? { label: name };
   const id = `field-${name}`;
   const describedBy = error ? `${id}-error` : undefined;
@@ -72,17 +72,29 @@ export default function Field({ name, spec, value, error, disabled, onChange, on
         step={spec.type === "integer" ? 1 : "any"}
       />
     );
+    if (info.prefix) {
+      input = (
+        <div className="input-affix">
+          <span className="affix" aria-hidden="true">
+            {info.prefix}
+          </span>
+          {input}
+        </div>
+      );
+    }
   }
 
-  const helpText = [info.help, hint(spec)].filter(Boolean).join(" ");
+  const typical = hint(spec);
   return (
-    <div className={`field${error ? " has-error" : ""}${disabled ? " is-disabled" : ""}`}>
+    <div className={`field${error ? " has-error" : ""}${warning && !error ? " has-warning" : ""}${disabled ? " is-disabled" : ""}`}>
       <label htmlFor={id}>
         {info.label}
         {spec.required && <span className="required"> (required)</span>}
       </label>
       {input}
-      {helpText && <small className="help">{helpText}</small>}
+      {info.help && <small className="help">{info.help}</small>}
+      {typical && <small className="help typical">{typical}</small>}
+      {warning && !error && <small className="field-warning">{warning}</small>}
       {error && (
         <small className="field-error" id={`${id}-error`} role="alert">
           {error}

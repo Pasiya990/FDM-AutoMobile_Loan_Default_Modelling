@@ -26,6 +26,15 @@ export function fromApplication(application, specs) {
 
 const isBlank = (raw) => raw === undefined || raw === null || raw === "";
 
+// How many of these fields have an answer
+export const filledCount = (fields, values) => fields.filter((field) => !isBlank(values[field])).length;
+
+// Progress through the details every check needs: the required fields, plus years in the job when employed
+export function keyProgress(values, required) {
+  const needed = values.not_employed === "no" ? [...required, "years_employed"] : [...required];
+  return { done: needed.filter((field) => !isBlank(values[field])).length, total: needed.length };
+}
+
 // Fields that are switched off by another answer, and the answer that switches them off
 export const DISABLED_WHEN = {
   years_employed: { field: "not_employed", value: "yes" },
