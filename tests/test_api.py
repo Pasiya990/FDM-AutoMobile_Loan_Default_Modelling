@@ -182,3 +182,17 @@ def test_every_endpoint_answers_503_without_a_model(tmp_path):
         for response in (no_model.get("/health"), no_model.get("/schema"), no_model.post("/predict", json=VALID)):
             assert response.status_code == 503
             assert response.json()["error"] == "model_not_available"
+
+
+# ---------------------------------------------------------------- demo examples
+def test_demo_examples_get_their_stated_band(client):
+    import json
+
+    from backend.examples import EXAMPLES_PATH
+
+    examples = json.loads(EXAMPLES_PATH.read_text(encoding="utf-8"))
+    assert [e["expected_band"] for e in examples] == ["Low", "Medium", "High"]
+    for example in examples:
+        body = client.post("/predict", json=example["application"]).json()
+        assert body["risk_band"] == example["expected_band"], "rebuild with: python -m backend.examples"
+        assert body["risk_score"] == pytest.approx(example["risk_score"], abs=5e-5)
