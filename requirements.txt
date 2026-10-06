@@ -9,3 +9,6 @@ imbalanced-learn
 jupyter
 joblib
 pytest
+fastapi
+uvicorn
+httpx
