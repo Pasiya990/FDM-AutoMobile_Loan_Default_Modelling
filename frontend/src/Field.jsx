@@ -1,13 +1,9 @@
-import { FIELDS, WEEKDAYS, valueLabel } from "./fields.js";
+import { FIELDS, WEEKDAYS, formatNumber, valueLabel } from "./fields.js";
 
 function hint(spec) {
   if (spec.typical_min === undefined) return null;
   if (spec.typical_min === spec.min && spec.typical_max === spec.max) return null;
-  return `Typical: ${format(spec.typical_min)} to ${format(spec.typical_max)}`;
-}
-
-function format(number) {
-  return Number(number).toLocaleString(undefined, { maximumFractionDigits: 3 });
+  return `Typical: ${formatNumber(spec.typical_min)} to ${formatNumber(spec.typical_max)}`;
 }
 
 export default function Field({ name, spec, value, error, onChange }) {

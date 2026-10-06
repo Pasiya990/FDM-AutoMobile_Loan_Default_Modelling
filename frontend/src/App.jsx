@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ApplicationForm from "./ApplicationForm.jsx";
+import { AboutModel, HowToUse } from "./Guide.jsx";
 import ResultPanel from "./ResultPanel.jsx";
 import { getExamples, getHealth, getSchema, predict } from "./api.js";
 import { apiErrors, checkValues, fromApplication, toApplication } from "./formValues.js";
@@ -94,6 +95,11 @@ export default function App() {
 
       {schema && (
         <>
+          <div className="guides">
+            <HowToUse />
+            <AboutModel schema={schema} />
+          </div>
+
           {examples.length > 0 && (
             <div className="examples">
               <span>Try an example:</span>

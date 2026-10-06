@@ -88,6 +88,7 @@ def test_schema_lists_the_form_fields(client):
     assert body["fields"]["age_years"]["min"] == 21 and body["fields"]["age_years"]["max"] == 69
     assert body["fields"]["contract_type"]["allowed"] == ["CL", "RL"]
     assert body["risk_bands"]["labels"] == ["Low", "Medium", "High"]
+    assert 0 < body["performance"]["recall"] < 1 and body["training_rows"] > 0
 
 
 # ---------------------------------------------------------------- training equals serving

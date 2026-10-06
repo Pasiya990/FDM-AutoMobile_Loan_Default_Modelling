@@ -54,6 +54,9 @@ def schema(request: Request):
         "required": list(REQUIRED_FIELDS),
         "risk_bands": store.metadata["risk_bands"],
         "model_version": store.model_version,
+        # Held-out test results at the operating threshold, for the page's "About the model"
+        "performance": {k: store.metadata["test_set"][k] for k in ("recall", "precision", "share_flagged")},
+        "training_rows": store.metadata["train_rows"],
     }
 
 
