@@ -43,6 +43,7 @@ function ScoreScale({ score, bands }) {
 
 export default function ResultPanel({ result, bands }) {
   const band = result.risk_band.toLowerCase();
+  const largest = Math.max(...result.top_factors.map((factor) => Math.abs(factor.impact)), 1e-9);
   return (
     <section className={`result result-${band}`} aria-live="polite" aria-labelledby="result-title">
       <div className="result-header">
@@ -62,14 +63,31 @@ export default function ResultPanel({ result, bands }) {
 
       {result.top_factors.length > 0 && (
         <>
-          <h3>Main factors</h3>
+          <h3>Main factors behind this score</h3>
           <ul className="factors">
-            {result.top_factors.map((factor) => (
-              <li key={factor.feature}>
-                {factor.label} - {factor.effect}
-              </li>
-            ))}
+            {result.top_factors.map((factor) => {
+              const share = Math.abs(factor.impact) / largest;
+              const raises = factor.impact > 0;
+              return (
+                <li key={factor.factor}>
+                  <span className="factor-name">{factor.factor}</span>
+                  <span className="factor-bar-track" aria-hidden="true">
+                    <span
+                      className={`factor-bar ${raises ? "raises" : "lowers"}`}
+                      style={{ width: `${Math.max(share * 100, 4)}%` }}
+                    />
+                  </span>
+                  <span className={`factor-effect ${raises ? "raises" : "lowers"}`}>
+                    {raises ? "▲ raises risk" : "▼ lowers risk"}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
+          <p className="result-note">
+            Factors are the parts of the application that moved this score most, compared with an average applicant.
+            They explain the model, not the causes of default.
+          </p>
         </>
       )}
 

@@ -336,3 +336,65 @@ footer {
   color: var(--muted);
   font-size: 0.85rem;
 }
+
+/* ---------------------------------------------------------------- factors */
+.factors {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.factors li {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.4fr) minmax(80px, 2fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.factor-bar-track {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--background);
+}
+
+.factor-bar {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+}
+
+.factor-bar.raises {
+  background: var(--high);
+}
+
+.factor-bar.lowers {
+  background: var(--low);
+}
+
+.factor-effect {
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.factor-effect.raises {
+  color: var(--high);
+}
+
+.factor-effect.lowers {
+  color: var(--low);
+}
+
+@media (max-width: 520px) {
+  .factors li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .factor-bar-track {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}

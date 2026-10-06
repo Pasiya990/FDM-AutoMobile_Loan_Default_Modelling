@@ -196,3 +196,5 @@ def test_demo_examples_get_their_stated_band(client):
         body = client.post("/predict", json=example["application"]).json()
         assert body["risk_band"] == example["expected_band"], "rebuild with: python -m backend.examples"
         assert body["risk_score"] == pytest.approx(example["risk_score"], abs=5e-5)
+        assert 1 <= len(body["top_factors"]) <= 4
+        assert {"factor", "effect", "impact"} <= set(body["top_factors"][0])

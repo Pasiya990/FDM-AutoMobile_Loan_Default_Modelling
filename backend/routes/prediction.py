@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from backend.adapter import build_model_row
 from backend.examples import EXAMPLES_PATH
+from backend.explain import top_factors
 from backend.messages import DISCLAIMER, PREDICTION_LABELS, SUGGESTED_ACTIONS
 from backend.validation import REQUIRED_FIELDS, field_specs, validate_request
 from src.models.risk_bands import risk_band
@@ -91,7 +92,7 @@ async def predict(request: Request):
         "risk_score": round(score, 4),
         "risk_band": band,
         "threshold": round(threshold, 4),
-        "top_factors": [],
+        "top_factors": top_factors(store.pipeline, row),
         "suggested_action": SUGGESTED_ACTIONS[band],
         "model_version": store.model_version,
         "disclaimer": DISCLAIMER,
