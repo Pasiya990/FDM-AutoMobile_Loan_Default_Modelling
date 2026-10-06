@@ -36,6 +36,8 @@ env/
 
 models/**/*.pkl
 models/**/*.joblib
+# the final model is small (0.7 MB) and a required deliverable, so it is kept
+!models/final/final_pipeline.joblib
 
 
 # =========================
@@ -54,3 +56,5 @@ models/**/*.joblib
 # Claude Code
 .claude/
 CLAUDE.md
+# FRONTEND
+frontend/node_modules/

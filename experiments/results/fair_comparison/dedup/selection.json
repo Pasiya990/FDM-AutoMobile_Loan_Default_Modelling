@@ -1,0 +1,30 @@
+{
+  "model": "xgboost_tuned",
+  "family": "xgboost",
+  "params": {
+    "subsample": 0.7,
+    "reg_lambda": 10.0,
+    "reg_alpha": 1.0,
+    "n_estimators": 400,
+    "min_child_weight": 1.0,
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "gamma": 0.5,
+    "colsample_bytree": 0.7,
+    "spw_factor": 1.0
+  },
+  "selected_by": "highest mean 5-fold CV ROC-AUC in notebook 06b (XGBoost configuration from the notebook 07 search)",
+  "operating_threshold": 0.5224268436431885,
+  "target_recall": 0.6,
+  "oof_at_threshold": {
+    "recall": 0.6000576285837775,
+    "precision": 0.1797583081570997,
+    "share_flagged": 0.2701851765474136
+  },
+  "cv_reference": {
+    "roc_auc_mean": 0.745352288616566,
+    "roc_auc_std": 0.004518781658767906,
+    "pr_auc_mean": 0.2281958715546958,
+    "pr_auc_std": 0.007620710494623489
+  }
+}

@@ -1,311 +1,296 @@
-# READ: Model Development After Feature Engineering (Whole Team)
+# READ: Model Development to Final System (Whole Team)
 
-**Automobile Loan Default Prediction · IT3051 Mini Project 2026**
+**Vehicle Loan Default Prediction · IT3051 Mini Project 2026**
 
-This file covers every model built after the feature-engineering stage, the shared protocol they were all scored
-with, the comparison, and the open problems. It's written for the team viva, so it covers all models, not one
-member's work.
+This file is the team's reference for everything after feature engineering: the shared protocol, every model, tuning,
+the final model, the threshold and risk bands, the extra analyses (ablation, explanations, fairness) and the prediction
+system. Every number comes from a file in `experiments/results/` or `models/final/metadata.json`. The reasons behind
+each decision are in [docs/decision_log.md](docs/decision_log.md).
 
-> **Protocol for every number here:** stratified, shuffled 5-fold cross-validation on the training split
-> (95,372 rows, 8.1% default), `RANDOM_STATE = 42`, default 0.5 threshold. Test-set numbers appear only where a
-> notebook reports them, and they are labelled as reference only. No model was selected on the test set.
+> **Protocol for every model number:** stratified, shuffled 5-fold cross-validation on the **cleaned** training split
+> (85,756 rows, 8.1% default, near-duplicate applicants removed), `RANDOM_STATE = 42`. The held-out test set
+> (21,440 rows) was used once, for the final model only.
 
 ---
 
 ## 1. Status at a glance
 
-| Model | Builder | Notebook | CV ROC-AUC | Protocol status |
-|---|---|---|---|---|
-| Logistic Regression | `src/models/logistic_regression.py` | `05a_logistic_regression.ipynb` | 0.734 ± 0.005 | verified |
-| Decision Tree | `src/models/decision_tree.py` | `decision_tree.ipynb` | 0.708 ± 0.004 | **unverified** |
-| Random Forest (untuned) | `src/models/random_forest.py` | `05_baseline_models_random_forest.ipynb` | 0.774 ± 0.004 | verified |
-| Random Forest (tuned) | same builder | `07b_random_forest_tuning.ipynb` | 0.770 ± 0.004 | verified, not kept |
-| Gaussian Naive Bayes | `src/models/gaussian_naive_bayes.py` | `05b_gaussian_naive_bayes.ipynb` | 0.697 ± 0.004 | verified |
-| XGBoost (baseline) | `src/models/xgboost_model.py` | `05c_XGBoost_Baseline.ipynb` | 0.763 ± 0.004 | verified |
-| XGBoost (tuned) | same builder | `07_hyperparameter_tuning.ipynb` | 0.771 ± 0.004 | verified |
-| LightGBM | `src/models/lightgbm_model.py` | `lightgbm.ipynb` | **none** | **pending** |
-
 | Area | Status |
 |---|---|
-| Pipeline refactor (fit/transform, one `build_pipeline`) | Done |
-| Shared CV harness and logger | Done |
-| Model comparison table | Done (`06b_model_comparison.ipynb`) |
-| Comparison plots (ROC/PR overlay) | Pending |
-| Leading-candidate decision | Proposed, needs team confirmation |
-| Operating threshold | Not chosen (team decision) |
-| Final model and test-set run | Not started (team decision) |
+| Data cleaning, near-duplicate removal, stratified split | Done (`src/data/`) |
+| Shared leak-free pipeline and CV harness | Done (`src/preprocessing/`, `src/evaluation/metrics.py`) |
+| Seven algorithms, baselines and tuning | Done (`notebooks/05*`, `07*`) |
+| Model comparison | Done (`notebooks/06b_model_comparison.ipynb`) |
+| Final model: tuned XGBoost, test set used once | Done (`models/final/`) |
+| Operating threshold (60% recall) and risk bands | Done |
+| Ablation study (Stage 7: does feature engineering help?) | Done (`experiments/results/ablation.csv`) |
+| Explanations (top factors per prediction) | Done (`backend/explain.py`) |
+| Fairness check | Done; team decision open (section 11) |
+| Backend (FastAPI) and frontend (React) | Done, 123 tests pass, checked on a clean machine |
+| Technical report and presentation | Not started |
 
 ---
 
-## 2. The shared pipeline and harness
+## 2. Data and the split
 
-### 2.1 Pipeline
+`clean_and_split()` in `src/data/data_cleaning.py`, run once before any modelling:
 
-The original pipeline recomputed statistics from both train and test on each call, so it couldn't transform a
-single new application. It is now one fitted `sklearn.Pipeline`, built by `build_pipeline(model)`.
-
-| File | Contains |
+| Step | Rows |
 |---|---|
-| [src/config.py](src/config.py) | Shared constants: `RANDOM_STATE`, `TARGET`, column lists, thresholds |
-| [src/data/data_cleaning.py](src/data/data_cleaning.py) | Row-level cleaning before the split: numeric coercion, duplicate removal, sentinel and placeholder fixes, stratified split |
-| [src/preprocessing/preprocessing.py](src/preprocessing/preprocessing.py) | Fit-on-train transformers: `ScoreSummaryAdder`, `MissingValueImputer`, `IncomeRatioAdder`, `IncomeLogTransformer`, `CategoricalOneHotEncoder` |
-| [src/preprocessing/feature_engineering.py](src/preprocessing/feature_engineering.py) | `RareCategoryGrouper`, `DerivedFeatureAdder`, `ImportanceFeatureSelector`, `SelectiveStandardScaler`, `build_pipeline(model)` |
+| Raw file | 121,856 |
+| Exact duplicates removed (ignoring ID) | -2,640 |
+| Near-duplicate applicant copies removed (`src/data/near_duplicates.py`) | -12,020 |
+| Remaining | 107,196 |
+| Stratified 80 / 20 split | 85,756 train · 21,440 test, both 8.1% default |
 
-**Verified:** after transformation the training data has 95,372 rows and 46 features, with zero missing values.
-The importance selector drops 58 features, and the top feature is `score_mean` (importance 0.227). A single new
-application can be transformed and scored by the fitted pipeline.
+**Why near-duplicates matter.** Many applicants appeared twice, identical except for a field left blank in one copy.
+They survive exact-duplicate removal and ended up on both sides of the CV folds and the train/test split, so models
+partly "recognised" applicants instead of predicting. The untuned Random Forest scored ROC-AUC 0.774 with them and
+0.730 without them: about 0.04 of its score was leakage. All numbers in this file are on the cleaned split.
 
-**Tests:** [tests/test_pipeline.py](tests/test_pipeline.py) has 16 passing tests: the split, no-leakage checks,
-single-row transformation, and unseen categories.
-
-### 2.2 Evaluation harness
-
-[src/evaluation/metrics.py](src/evaluation/metrics.py):
-
-- `evaluate_model(pipeline, X, y, cv=5, threshold=0.5)` runs stratified, shuffled 5-fold CV with seed 42. It clones
-  the pipeline for each fold, so no fitted state leaks between folds. It reports ROC-AUC, PR-AUC, recall, precision,
-  F1, and the confusion matrix.
-- `log_result_to_csv(results, path)` writes one row per model name and replaces any old row, so reruns don't
-  duplicate.
+Row-level fixes in the same step: text numbers parsed, the `Employed_Days` code 365243 turned into a blank plus the
+`Is_Retired_Or_Unemployed` flag, placeholders (`XNA`, `##`) and impossible values above 1 turned into blanks,
+`Own_House_Age` reinterpreted as `car_age` with a `has_car_age` flag, `ID` dropped.
 
 ---
 
-## 3. Models, one by one
+## 3. The shared pipeline and protocol
 
-### 3.1 Logistic Regression (teammate, `05a_logistic_regression.ipynb`)
+**Pipeline** (`build_pipeline(model)` in `src/preprocessing/feature_engineering.py`): one scikit-learn `Pipeline`
+whose steps learn only from the training data they are fitted on, then the model as the last step:
 
-- **Builder:** `build_logistic_regression_pipeline()`: L2 regularisation, `C=1.0`, `class_weight="balanced"`,
-  `max_iter=1000`, `lbfgs`. It is the untuned linear baseline.
-- **CV result:** ROC-AUC 0.734 ± 0.005, PR-AUC 0.212 ± 0.005, recall 0.668, precision 0.153, F1 0.249.
-- **Reference only, test set:** ROC-AUC 0.743, PR-AUC 0.215, recall 0.688. At 0.5 it caught 1,329 of 1,931
-  defaulters and flagged 7,227 non-defaulters.
-- **Decision recorded in the notebook:** keep as the untuned, interpretable linear baseline. It has much higher
-  recall at 0.5 than Random Forest, but Random Forest ranks better overall.
-- **Why it's behind:** a straight-line model can't draw curves or interactions, so it underfits.
+input check → score summaries → imputation with missing flags → income ratios → log income → one-hot encoding →
+rare-category grouping → derived features (age in years, credit/annuity ratio, ...) → importance-based feature
+selection → scaling → model
 
-### 3.2 Decision Tree (teammate, `decision_tree.ipynb`)
+Because every step is inside the pipeline, cross-validation refits it per fold (no leakage), and the backend applies
+exactly the same steps to one new application.
 
-- **Builder:** `build_decision_tree_pipeline()`: `max_depth=6`, `min_samples_leaf=20`, `class_weight="balanced"`,
-  `random_state=42`. The model is a single tree, so it's easy to read as rules.
-- **Logged CV result:** ROC-AUC 0.708 ± 0.004, PR-AUC 0.181 ± 0.004, recall 0.607, precision 0.152, F1 0.242.
-- **Reference only, test set:** ROC-AUC 0.706, PR-AUC 0.173, recall 0.605, precision 0.147.
-- **Status: unverified.** The notebook's Finding describes 5-fold CV, but no cross-validation code exists in the
-  repo. The logged row's source is unknown. The notebook also loads `X_train.joblib` and similar files, which
-  aren't in `data/processed/`, so it can't run as-is.
-- **Why it's behind:** a single tree with leaves of at least 20 gives coarse predictions. Unlimited depth overfits.
+**Fixed during backend work:** the one-hot encoder dropped the "first" category of whatever rows it was given. For a
+single applicant that was the applicant's own category, so every category column became 0 and one-at-a-time scores
+were off by up to 0.22. Batch results, and therefore every reported number, were unaffected (difference 0.0). Fixed in
+`src/preprocessing/preprocessing.py`, with a test that single rows match the batch.
 
-### 3.3 Random Forest (ours)
+**Harness** (`evaluate_model` in `src/evaluation/metrics.py`): stratified 5-fold CV, shuffle, seed 42, a fresh clone of
+the pipeline per fold; reports ROC-AUC, PR-AUC, and recall/precision/F1 at a threshold.
 
-- **Builder:** `build_random_forest_pipeline()`: 300 trees, `class_weight="balanced"`.
-- **Baseline notebook:** `05_baseline_models_random_forest.ipynb`.
-  - CV result: ROC-AUC 0.774 ± 0.004, PR-AUC 0.358 ± 0.009, recall 0.163, precision 0.632, F1 0.260.
-  - Figure: `experiments/figures/05_random_forest_roc_pr.png`.
-  - The low recall at 0.5 is a property of the operating point, not of the ranking.
-- **Tuning notebook:** `07b_random_forest_tuning.ipynb`.
-  - 30 random configurations, stratified 5-fold CV, ROC-AUC. The untuned baseline is re-evaluated under the same
-    folds, and the search space includes the baseline values.
-  - Tuned (500 trees, depth 20, leaf size 1, `sqrt` features, balanced): ROC-AUC 0.770 ± 0.004, PR-AUC 0.339,
-    recall 0.285, precision 0.381.
-  - **Decision:** keep the untuned baseline. The ROC-AUC gap is -0.004, within one standard deviation.
-  - **Caveat:** the exact baseline setting wasn't among the 30 samples, so this is not an exhaustive search.
-  - **Superseded:** an earlier run chose an operating threshold of 0.309. That gained recall, but the gain came
-    from the threshold, not the tuned parameters, and the baseline was never scored at that threshold.
-- **Imbalance comparison:** balanced 0.764 > balanced_subsample 0.760 > none 0.753 (best search scores).
-
-### 3.4 Gaussian Naive Bayes (ours, `05b_gaussian_naive_bayes.ipynb`)
-
-- **Builder:** `build_gaussian_naive_bayes_pipeline()`.
-- **CV result:** ROC-AUC 0.697 ± 0.004, PR-AUC 0.176 ± 0.009, recall 0.479, precision 0.170, F1 0.250.
-- **Why it's weakest:** it assumes features are independent given the class. Our features are strongly
-  correlated (`score_mean` and the `Score_Source` columns), so the assumption breaks.
-- **Decision:** no tuning. It has one parameter, and tuning wouldn't change the ranking.
-
-### 3.5 XGBoost baseline (teammate, `05c_XGBoost_Baseline.ipynb`)
-
-- **Builder:** `build_xgboost()` in `src/models/xgboost_model.py`, wrapped in `build_pipeline`:
-  300 trees, learning rate 0.05, max depth 6, subsample 0.8, column sample 0.8, `logloss`. It has no class weighting.
-- **CV result:** ROC-AUC 0.763 ± 0.004, PR-AUC 0.261 ± 0.010, recall 0.022, precision 0.622, F1 0.042.
-- **Why recall is so low at 0.5:** no class weighting, so the model rarely predicts default at that cut-off.
-  Its probabilities still rank well (ROC-AUC 0.763).
-- **Notebook conclusion:** the recorded baseline is the reference point for tuning.
-
-### 3.6 XGBoost tuned (teammate, `07_hyperparameter_tuning.ipynb`)
-
-- **Search:** `RandomizedSearchCV`, 30 configurations, stratified 5-fold CV, ROC-AUC. The search space covers trees,
-  learning rate, depth, minimum child weight, subsample, column sample, gamma, and two regularisation terms.
-- **Best parameters:** 700 trees, learning rate 0.03, depth 8, subsample 0.7, column sample 0.8, minimum child
-  weight 1, gamma 0.5, `reg_alpha` 0.01, `reg_lambda` 2.0.
-- **CV result:** ROC-AUC 0.771 ± 0.004, PR-AUC 0.307 ± 0.009, recall 0.045, precision 0.717, F1 0.085.
-- **Caveat:** the notebook also reports results on the held-out test set. Those are reference only and weren't used
-  to pick the parameters, but the team has not agreed a policy for test-set numbers.
-- **Compared with the baseline:** ROC-AUC +0.008, which is about twice the standard deviation, and PR-AUC up from
-  0.261 to 0.307. The ROC-AUC gain is real, but the recall at 0.5 is still very low.
-
-### 3.7 LightGBM (teammate, `lightgbm.ipynb`)
-
-- **Builder:** `build_lightgbm_pipeline()` in `src/models/lightgbm_model.py`: 100 trees, learning rate 0.05, max depth
-  5, `scale_pos_weight=11.37`, `random_state=42`. A `FeatureNameCleaner` step renames columns, because LightGBM
-  rejects colons and spaces.
-- **Reference only, test set (from the notebook and docstring):** ROC-AUC 0.748, PR-AUC 0.215, recall 0.648,
-  precision 0.168. Training takes about 2 seconds.
-- **Status: pending.** There is no cross-validated result, so it can't be compared yet. The notebook also loads
-  `X_train.joblib` and similar files that aren't in the repo.
-- **Feature names:** the notebook's top features (`Credit_to_Annuity_Ratio`, `Mean_Bureau_Score`, `Age_Days`) don't
-  match the column names our pipeline produces (`credit_to_income`, `score_mean`, `Age_Years`). The notebook was
-  probably run on an older feature set, which needs checking.
+**Metrics.** ROC-AUC is the primary, threshold-free metric; PR-AUC is the tie-break because only 8% default.
+Accuracy is not used: always predicting "no default" already scores 91.9%. Recall, precision and F1 at 0.5 are **not
+comparable across models**, because models with and without class weights place their scores differently; the
+operating threshold is chosen separately (section 7).
 
 ---
 
-## 4. Comparison
+## 4. The models
 
-`notebooks/06b_model_comparison.ipynb` reads `experiments.csv`, `logistic_regression.csv`, and
-`xgboost_baseline_vs_tuned.csv`. It keeps the most recent row per model name, and it doesn't use the test set.
+| Rank | Model | Builder | CV ROC-AUC | CV PR-AUC |
+|---|---|---|---|---|
+| 1 | XGBoost (tuned) | `src/models/xgboost_model.py` | 0.745 ± 0.004 | 0.229 ± 0.007 |
+| 2 | LightGBM (tuned) | `src/models/lightgbm_model.py` | 0.744 ± 0.004 | 0.226 ± 0.007 |
+| 3 | LightGBM (baseline) | same | 0.742 ± 0.003 | 0.218 ± 0.005 |
+| 4 | XGBoost (baseline) | same as tuned | 0.738 ± 0.005 | 0.221 ± 0.005 |
+| 5 | Random Forest (tuned) | `src/models/random_forest.py` | 0.736 ± 0.004 | 0.215 ± 0.006 |
+| 6 | Logistic Regression | `src/models/logistic_regression.py` | 0.733 ± 0.003 | 0.212 ± 0.008 |
+| 7 | Random Forest (untuned) | same as tuned | 0.730 ± 0.003 | 0.209 ± 0.005 |
+| 8 | Decision Tree | `src/models/decision_tree.py` | 0.708 ± 0.005 | 0.178 ± 0.002 |
+| 9 | Gaussian Naive Bayes | `src/models/gaussian_naive_bayes.py` | 0.697 ± 0.003 | 0.181 ± 0.006 |
 
-| Rank | Model | ROC-AUC | PR-AUC | Recall (0.5) | Precision (0.5) | Protocol |
+**Why they land where they do:**
+
+- **Boosted trees (XGBoost, LightGBM)** build trees one after another, each correcting the previous ones' errors, and
+  handle interactions and missing values well. They are usually strongest on tabular credit data, and are here.
+- **Random Forest** averages many deep trees. Untuned, its trees grow fully and partly memorise the training data;
+  tuning (depth 12, leaves of at least 20) regularised it and helped once the leak was removed.
+- **Logistic Regression** draws a straight-line boundary, so it misses interactions. It stays close behind the trees,
+  possibly because the strongest signal (the external scores) moves risk in one direction; this was not tested.
+- **Decision Tree**: one depth-limited tree gives coarse, step-like scores.
+- **Gaussian Naive Bayes** assumes the features are independent given the class; the scores and ratio features are
+  strongly correlated, so the assumption breaks.
+
+Class imbalance (8% default) is handled with class weights: `class_weight="balanced"` for Random Forest, Decision Tree
+and (baseline) Logistic Regression, `scale_pos_weight` ≈ 11.35 (non-defaulters / defaulters) for XGBoost and a
+similar weight for LightGBM.
+
+---
+
+## 5. Tuning
+
+All searches: `RandomizedSearchCV`, stratified 5-fold CV, ROC-AUC, training split only.
+
+| Model | Baseline ROC-AUC | Tuned ROC-AUC | Best settings |
+|---|---|---|---|
+| XGBoost (`07_hyperparameter_tuning.ipynb`) | 0.738 | 0.745 | 400 trees, depth 4, learning rate 0.05, subsample 0.7, column sample 0.7, gamma 0.5, `reg_alpha` 1, `reg_lambda` 10 |
+| LightGBM (`lightgbm.ipynb`) | 0.742 | 0.744 | 300 trees, depth 4, 31 leaves, learning rate 0.05, column sample 0.7, `scale_pos_weight` 10 |
+| Random Forest (`07b_random_forest_tuning.ipynb`) | 0.730 | 0.736 | 500 trees, depth 12, at least 20 per leaf, `sqrt` features, `balanced_subsample` |
+| Logistic Regression (`07a_logistic_regression_tuning.ipynb`) | 0.733 | see notebook | C = 0.01, no class weight |
+
+The best settings are all strongly regularised (shallow boosted trees, leaf limits, L1/L2 penalties): with a limited signal, overfitting is the main risk.
+
+---
+
+## 6. Final model selection
+
+**XGBoost (tuned)** is the final model: it ranked first on the team's rule (highest mean CV ROC-AUC, PR-AUC as tie-break).
+
+Be honest about the margin in the viva: XGBoost tuned leads LightGBM tuned by 0.0007 ROC-AUC, far inside the
+fold-to-fold spread (about 0.004). The top two are statistically tied; XGBoost was kept because it was first in the
+table, has the higher PR-AUC, and its explanations (section 10) need no extra library.
+
+**How the final model was built.** `src/models/select_final.py` takes the notebook-07 settings, re-runs 5-fold CV
+(ROC-AUC 0.7454 ± 0.0045, PR-AUC 0.228 ± 0.008, matching notebook 07), chooses the threshold from the out-of-fold
+predictions, and writes `experiments/results/fair_comparison/dedup/selection.json`. Then `src/models/train_final.py`
+fits on the full training split, scores the test set **once**, and saves `models/final/final_pipeline.joblib` and
+`metadata.json`. (`src/models/fair_comparison.py` contains a longer search with early stopping; it was not run for the
+final selection.)
+
+---
+
+## 7. Operating threshold and risk bands
+
+**Threshold 0.522.** The highest threshold that still catches 60% of defaulters in the out-of-fold training
+predictions (recall target agreed by the team; a missed defaulter costs far more than an extra review). It is above
+0.5 because the class weight pushes scores up. At 0.522 on the training predictions: recall 0.600, precision 0.180,
+27.0% of applicants flagged.
+
+**Risk bands** (`src/models/risk_bands.py`, cut-offs saved in `metadata.json`):
+
+| Band | Risk score | Applicants | Past default rate | Share of all defaulters |
+|---|---|---|---|---|
+| Low | below 0.25 | 28% | 2.3% | 8% |
+| Medium | 0.25 to 0.52 | 45% | 5.8% | 32% |
+| High (= flagged) | 0.52 and above | 27% | 18.0% | 60% |
+
+The score is a **risk score, not a probability**: with class weights, 0.6 does not mean a 60% chance of default. The
+interface says so.
+
+---
+
+## 8. Final test result (held-out test set, used once)
+
+| ROC-AUC | PR-AUC | Recall | Precision | Flagged | Caught / missed defaulters | Good applicants flagged |
 |---|---|---|---|---|---|---|
-| 1 | Random Forest (untuned) | 0.774 ± 0.004 | 0.358 ± 0.009 | 0.163 | 0.632 | verified |
-| 2 | XGBoost Tuned | 0.771 ± 0.004 | 0.307 ± 0.009 | 0.045 | 0.717 | verified |
-| 3 | Random Forest (tuned) | 0.770 ± 0.004 | 0.339 ± 0.009 | 0.285 | 0.381 | verified |
-| 4 | XGBoost Baseline | 0.763 ± 0.004 | 0.261 ± 0.010 | 0.022 | 0.622 | verified |
-| 5 | Logistic Regression | 0.734 ± 0.005 | 0.212 ± 0.005 | 0.668 | 0.153 | verified |
-| 6 | Decision Tree | 0.708 ± 0.004 | 0.181 ± 0.004 | 0.607 | 0.152 | **unverified** |
-| 7 | Gaussian NB | 0.697 ± 0.004 | 0.176 ± 0.009 | 0.479 | 0.170 | verified |
+| 0.760 | 0.247 | 0.627 | 0.187 | 27.2% | 1,088 / 647 | 4,739 |
 
-**Not in the table:** LightGBM, because it has no cross-validated result. Its test-set numbers would mix protocols.
-
-**Proposed shortlist (team to confirm):** Random Forest (untuned) and XGBoost Tuned. They are within one standard
-deviation on ROC-AUC, and Random Forest leads clearly on PR-AUC. XGBoost Tuned's recall at 0.5 is very low, so the
-operating threshold matters for it.
+In plain words: the model catches about 6 in 10 defaulters by flagging about 27 in 100 applicants; about 1 in 5
+flagged applicants really defaults. The test results are close to the CV estimates (0.745, 0.600, 0.180), so the
+threshold held on unseen data.
 
 ---
 
-## 5. How to run it
+## 9. Ablation study (Stage 7: does feature engineering help?)
 
-```
-pip install -r requirements.txt
-pytest -q
-```
+`src/models/ablation.py`, same folds, change measured per fold against the full pipeline:
 
-Run notebooks from `notebooks/`, which finds the project root automatically.
+| Variant | ROC-AUC | Change | PR-AUC | Change |
+|---|---|---|---|---|
+| Full final pipeline (55 features) | 0.745 | | 0.228 | |
+| Without engineered features | 0.739 | -0.007 ± 0.002 | 0.221 | -0.008 ± 0.002 |
+| Without feature selection (102 features) | 0.746 | +0.000 ± 0.002 | 0.226 | -0.002 ± 0.002 |
+| Without the three bureau scores | 0.691 | **-0.055 ± 0.006** | 0.173 | **-0.055 ± 0.006** |
+| Without `Active_Loan` and `Social_Circle_Default` | 0.744 | -0.001 ± 0.002 | 0.227 | -0.001 ± 0.003 |
 
-| Notebook | Time |
-|---|---|
-| `05a_logistic_regression.ipynb` | not timed |
-| `05_baseline_models_random_forest.ipynb` | about 3 minutes |
-| `05b_gaussian_naive_bayes.ipynb` | about 1 minute |
-| `05c_XGBoost_Baseline.ipynb` | not timed |
-| `07b_random_forest_tuning.ipynb` | 35–45 minutes |
-| `07_hyperparameter_tuning.ipynb` (XGBoost) | not timed (longer than a single baseline) |
-| `06b_model_comparison.ipynb` | seconds |
-
-**Test status:** 21 of 22 pass. The failure is `test_lightgbm_pipeline_fits_and_predicts`, because `lightgbm` is not in
-`requirements.txt` yet.
+- The engineered features earn their place: a small loss, but consistent across folds.
+- Feature selection halves the inputs at no cost in accuracy, so it is kept for simplicity.
+- The model depends heavily on the external bureau scores: applicants without them are scored less reliably (a
+  limitation for the report).
+- The two columns with uncertain meaning make no measurable difference; they were kept to avoid refitting the final
+  model and reusing the test set (decision log D12).
 
 ---
 
-## 6. Known issues
+## 10. Explanations
 
-These are recorded so nobody is surprised. Several are unresolved.
-
-1. **Decision Tree CV source unknown.** The logged row has no cross-validation code in the repo, and the teammate's
-   `05_baseline_models.ipynb` that probably produced it is no longer in `notebooks/`.
-2. **Decision Tree and LightGBM notebooks can't run as-is.** They load `X_train.joblib` and similar files that aren't
-   in `data/processed/`.
-3. **LightGBM has no CV result**, and its feature names don't match the current pipeline.
-4. **Test-set numbers are reported in several notebooks** (Logistic Regression, Decision Tree, LightGBM, XGBoost
-   tuning). They weren't used to select parameters, but the team hasn't agreed a rule for them.
-5. **Duplicate rows in `experiments.csv`**: the Decision Tree appears twice, and an earlier Random Forest row was
-   duplicated. `06b` deduplicates on read; the file itself isn't cleaned.
-6. **`lightgbm` missing from `requirements.txt`.** One test fails until it's added.
-7. **Teammate's `06_model_comparison.ipynb` is broken.** It raises `NameError: X_train`, covers XGBoost only, and has a
-   hard-coded Mac path. `06b` was built instead, and the teammate's file was not touched.
-8. **Naming:** `"XGBoost Baseline"` uses spaces and capitals. Flagged, not renamed.
-9. **README is stale.** Its structure section doesn't list the new notebooks or modules.
-10. **Backend, frontend, and `models/baseline|tuned|final/`** are still empty.
+`backend/explain.py` uses XGBoost's built-in exact TreeSHAP (`pred_contribs=True`): every model feature gets a
+contribution, and the contributions add up to the model's score (tested). They are summed into readable factors
+("External credit scores", "Loan size compared with income", "Employer type", ...) and the four strongest are returned
+with "raises risk" or "lowers risk". The external scores are the strongest factor for most applicants, which agrees
+with the ablation. The factors explain the model, not the causes of default.
 
 ---
 
-## 7. Viva guide: the whole story
+## 11. Fairness check
 
-Follow the story, not the file order: **protocol → pipeline → each model → what tuning changed → comparison →
-what we keep, and what's still open.** For each model, spend about one minute: the builder, the CV result, and one
-sentence on why it lands where it does.
+`src/models/fairness.py`, on out-of-fold training predictions at the operating threshold:
 
-### Step 1: the shared protocol (1 min)
-Open [src/evaluation/metrics.py](src/evaluation/metrics.py). Point at `StratifiedKFold(shuffle=True, random_state=RANDOM_STATE)`
-and `clone(pipeline)`.
+| Attribute | Good applicants wrongly flagged (false-positive rate) | Precision |
+|---|---|---|
+| Age | 61-69: 10% · 21-30: **40%** | 13% to 19% |
+| Gender | Male: 20% · Female: **33%** | 17% to 19% |
+| Marital status | Widowed: 13% · Single: 30% | 17% to 19% |
+| Education | Graduation: 13% · Secondary: 29% | 15% to 22% |
+| Income type | Retired: 12% · Service: 31% | 14% to 19% |
 
-> "Every model is scored by the same function, with the same folds, metric, and threshold. That's what makes the
-> comparison fair."
-
-### Step 2: the pipeline (1 min)
-Open [src/preprocessing/feature_engineering.py](src/preprocessing/feature_engineering.py), `build_pipeline`.
-
-> "Imputation, encoding, and feature selection learn from training data only, and the model is the last step. So one
-> fitted object can score one new application."
-
-### Step 3: the models (about 8 minutes)
-Logistic Regression, Decision Tree, Random Forest, Gaussian NB, XGBoost baseline, XGBoost tuned, LightGBM. Use the
-sections in this file. For LightGBM and the Decision Tree, say the status plainly.
-
-### Step 4: tuning (2 min)
-Random Forest: tuned didn't beat the baseline, so we kept the baseline. XGBoost: tuning gained about 0.008 ROC-AUC,
-which is real, and it raised PR-AUC from 0.261 to 0.307.
-
-### Step 5: the comparison (2 min)
-Open `06b_model_comparison.ipynb`.
-
-> "Random Forest ranks first on ROC-AUC and PR-AUC. XGBoost Tuned is close on ROC-AUC. We propose carrying both
-> forward. The Decision Tree and LightGBM are pending verification."
+- Every attribute has a gap above the plan's 10-point limit. The gaps largely follow real differences in default rates
+  (21-30: 11.0% default vs 61-69: 5.2%; women 10.0% vs men 7.1%).
+- Precision is similar across groups: a flag means about the same for everyone. But good applicants from some groups
+  are sent to extra review far more often.
+- **Without gender, marital status and age:** ROC-AUC 0.745 → 0.743 (-0.003); the gender gap falls below the limit
+  (false-positive rates 22% vs 30%); the age gap does not shrink, because age is carried by other inputs (for example
+  the external scores and the retired income type).
+- **Open team decision:** keep the final model and report the gaps (recommended for this submission, since a person
+  reviews every flag), or refit without gender and marital status (fairer between men and women, but uses the test
+  set a second time).
 
 ---
 
-## 8. Likely questions
+## 12. The prediction system
 
-**Why do all the models use the same protocol?**
-So the comparison is fair. Otherwise a difference could come from the split, not the model.
+| Part | Files | What it does |
+|---|---|---|
+| Model loading | `backend/model_store.py` | Loads the pipeline and metadata once; 503 if missing; warns on library-version mismatch |
+| Input adapter | `backend/adapter.py` | Form fields (age in years, "not employed", yes/no) → the model's columns, repeating the cleaning rules |
+| Validation | `backend/validation.py` | Required fields, types, limits and categories from the saved training schema; 422 with per-field details |
+| API | `backend/app.py`, `backend/routes/prediction.py` | `/health`, `/schema`, `/examples`, `/predict`; also serves the web page |
+| Explanations | `backend/explain.py` | Top factors per prediction |
+| Frontend | `frontend/src/` (React, built to `frontend/dist/`) | Header, application form, example applicants, results beside the form, How to use page, print summary |
 
-**Why 5-fold CV and not the test set?**
-The test set must stay unseen until the final model is chosen. Comparisons use CV on the training data only.
+`/predict` returns the prediction in words, risk score, band, threshold, top factors, suggested action, model
+version and a disclaimer. Run it with `uvicorn backend.app:app --reload` and open http://127.0.0.1:8000/ (README).
 
-**Why is accuracy not reported?**
-Predicting "no default" for everyone gives about 92% accuracy, so it doesn't measure anything useful.
-
-**Why is Logistic Regression behind?**
-It can't draw curves or interactions, so it underfits, even with balanced weights.
-
-**Why does the Decision Tree have a question mark?**
-Its logged numbers have no traceable cross-validation code, and its notebook can't run as-is. We'll confirm the source
-or re-run it.
-
-**Why is LightGBM not in the comparison?**
-It has no cross-validated result yet, so adding its test-set numbers would mix protocols.
-
-**Why did XGBoost tuning help but Random Forest tuning didn't?**
-In our runs, XGBoost tuning improved ROC-AUC by about twice its standard deviation, while Random Forest's best sampled
-configuration fell slightly below its untuned baseline. We haven't tested why. One possible reason is that the
-XGBoost baseline used untuned settings, but that's a hypothesis, not a finding.
-
-**Why does XGBoost have such low recall at 0.5?**
-It has no class weighting, and its probabilities sit below 0.5 for most defaulters. Its ranking is still good.
-
-**Why not tune Naive Bayes?**
-It has one parameter and is clearly the weakest model, so tuning wouldn't change the outcome.
-
-**Is XGBoost Tuned really close to Random Forest?**
-On ROC-AUC, yes: 0.771 against 0.774, within one standard deviation. On PR-AUC, no: 0.307 against 0.358.
-
-**What threshold will the final model use?**
-Not chosen yet. Earlier, a threshold of 0.309 gave recall 0.65 but about 22,000 extra false alarms, and that gain came
-from the threshold, not the tuning. The threshold is a team decision applied to all models.
+**Testing:** 123 automated tests (`pytest -q`), including: `/predict` equals the pipeline called directly on 100 real
+test applications; every kind of invalid input; the model missing; single rows scored exactly like batches; SHAP
+contributions adding up to the score. The whole suite was also run in a fresh Python environment from
+`requirements.txt`, which found and fixed a missing `pyarrow` dependency and unpinned library versions.
 
 ---
 
-## 9. Before you present: checklist
+## 13. Known issues and limitations
 
-- [ ] Add `lightgbm` to `requirements.txt`, then `pip install -r requirements.txt`
-- [ ] `pytest -q`: expect 22 of 22
-- [ ] Open, in this order: `src/evaluation/metrics.py`, `src/preprocessing/feature_engineering.py`, then one notebook per model
-- [ ] Notebooks already show their outputs. Don't re-run the tuning notebooks during the viva
-- [ ] Know the Decision Tree and LightGBM status before saying anything about them
-- [ ] Know the test-set reporting issue (section 6, item 4) in case it's raised
+1. **Bureau-score dependence:** without the external scores, ranking quality drops sharply (section 9).
+2. **Fairness gaps** in who gets flagged (section 11).
+3. **Undocumented data:** the dataset's source, currency, period and some column meanings (`Active_Loan`,
+   `Social_Circle_Default`, `Own_House_Age`) are not documented; there is no application date, so no time-based test.
+4. **Day of application:** the data codes days 0 to 6; 0 is taken to be Sunday (it is the quietest day). An inference.
+5. **Risk score, not probability:** scores are shifted by the class weight; calibration is future work.
+6. **Result files:** `experiments.csv` and `xgboost_baseline_vs_tuned.csv` still contain two old XGBoost Baseline rows
+   from before near-duplicate removal; `06b` keeps the most recent row per model, so its table is correct.
+7. **Test-set use by teammates:** the Logistic Regression notebooks also report test-set results
+   (`logistic_regression_test.csv`, `logistic_regression_tuned_test.csv`). They were not used to choose the final
+   model; say so if asked.
+
+---
+
+## 14. Likely viva questions
+
+**Why not accuracy?** Always predicting "no default" scores 91.9% and catches nobody.
+
+**Why is the threshold not 0.5?** At 0.5 a model trained on 8% defaulters catches few of them. We chose the
+threshold for 60% recall on training data only; it is 0.522 here because class weights push scores up.
+
+**Why XGBoost?** Highest CV ROC-AUC under the team's rule, though statistically tied with LightGBM; boosted trees
+model interactions and missing values well.
+
+**Why did scores fall compared with earlier runs?** Near-duplicate applicants inflated them; removing them is the
+honest estimate.
+
+**How do you know the system uses the same preprocessing as training?** The saved pipeline contains every
+preprocessing step, and a test shows `/predict` returns exactly the pipeline's own score on 100 real applications.
+
+**Did feature engineering help?** Yes, modestly and consistently (-0.007 ROC-AUC without it); the bureau scores
+matter most.
+
+**Is the model fair?** It flags some groups more, largely following differences in past default rates; precision is
+similar across groups. Removing gender narrows the gender gap; removing age does not narrow the age gap because other
+inputs carry age information. A person reviews every flag; the tool never refuses automatically.
+
+**Why was the test set used only once?** Choosing anything on it would make the reported score optimistic.

@@ -72,11 +72,85 @@ The final model is selected based on experimental results and the requirements o
 
 The final trained model is integrated into a prediction system consisting of:
 
-- **Frontend:** [Technology]
-- **Backend:** [Technology]
-- **Machine Learning Model:** [Final Model]
+- **Frontend:** React (JavaScript, built with Vite), served by the backend
+- **Backend:** FastAPI (Python)
+- **Machine Learning Model:** tuned XGBoost inside the shared preprocessing pipeline
+  (`models/final/final_pipeline.joblib`, details in `models/final/metadata.json`)
 
-Users can enter the required input values and receive a prediction from the trained model.
+A loan officer enters an application and receives a **risk score**, a **risk band** (Low / Medium / High) and a
+**suggested action**. The system supports decisions; it never refuses an application by itself.
+
+| | Final model (held-out test set, used once) |
+|---|---|
+| ROC-AUC | 0.760 |
+| PR-AUC | 0.247 |
+| Operating threshold | 0.522 (chosen for 60% recall on training data) |
+| Recall / precision at the threshold | 0.627 / 0.187 |
+| Applicants flagged | 27.2% |
+
+Risk bands (chosen on out-of-fold training predictions): **Low** below 0.25 (about 2% default), **Medium** 0.25 to
+0.52 (about 6%), **High** from 0.52, the flagged applicants (about 18%). The risk score ranks applicants; it is not a
+probability, because the model weights the default class.
+
+## ▶️ Running the System
+
+You need **Python 3.11 or later**. Node.js is only needed to change the web page.
+
+```bash
+# 1. Install the Python packages (from the project root)
+pip install -r requirements.txt
+
+# 2. Start the API, which also serves the web page
+uvicorn backend.app:app --reload
+#    (if "uvicorn" is not found: python -m uvicorn backend.app:app --reload)
+```
+
+Then open:
+
+- **http://127.0.0.1:8000/** for the web page. "Try an example" fills the form with a real low-, medium- or high-risk
+  applicant.
+- **http://127.0.0.1:8000/docs** for the interactive API documentation.
+
+Keep the terminal open while using the system; `Ctrl+C` stops it.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Model status and version |
+| `GET /schema` | Form fields, limits and allowed values |
+| `GET /examples` | Three demo applicants |
+| `POST /predict` | Scores one application; `422` with per-field details for invalid input, `503` if the model is missing |
+
+### Tests
+
+```bash
+pytest -q
+```
+
+Most tests need the dataset at `data/raw/Train_Dataset.csv` (it is not stored in the repository; download
+`Train_Dataset.csv` from the Kaggle link above).
+
+### Changing the web page
+
+```bash
+cd frontend
+npm install
+npm run dev      # live-reloading page at http://localhost:5173, using the API started above
+npm run build    # writes frontend/dist/, which the API serves
+```
+
+`frontend/dist/` is kept in git so the system runs with Python only: rebuild and commit it after changing the page.
+
+### Rebuilding the final model (only if needed)
+
+Needs the dataset in `data/raw/`.
+
+```bash
+python -m src.models.select_final        # cross-validation, threshold and selection.json (training data only)
+python -m src.models.train_final --force # fits the final model and scores the held-out test set
+python -m backend.examples               # refreshes the demo applicants
+```
+
+`train_final` refuses to run again without `--force`, because each run uses the held-out test set.
 
 ## 📁 Project Structure
 
@@ -84,71 +158,44 @@ Users can enter the required input values and receive a prediction from the trai
 FDM-AutoMobile_Loan_Default_Modelling/
 │
 ├── data/
-│   ├── raw/
-│   │   └── .gitkeep
+│   ├── raw/                     # Train_Dataset.csv (not in git)
 │   └── processed/
-│       └── .gitkeep
 │
-├── notebooks/
-│   ├── 01_data_understanding.ipynb
-│   ├── 02_eda.ipynb
-│   ├── 03_data_preprocessing.ipynb
-│   ├── 04_feature_engineering.ipynb
-│   ├── 05_baseline_models.ipynb
-│   ├── 06_model_comparison.ipynb
-│   └── 07_hyperparameter_tuning.ipynb
+├── notebooks/                   # 01-04 data understanding to feature engineering,
+│                                # 05* baselines, 06b comparison, 07* tuning
 │
 ├── src/
-│   ├── data/
-│   │   ├── __init__.py
-│   │   └── data_cleaning.py
-│   │
-│   ├── preprocessing/
-│   │   ├── __init__.py
-│   │   ├── preprocessing.py
-│   │   └── feature_engineering.py
-│   │
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── logistic_regression.py
-│   │   ├── decision_tree.py
-│   │   ├── random_forest.py
-│   │   └── xgboost_model.py
-│   │
-│   └── evaluation/
-│       ├── __init__.py
-│       ├── metrics.py
-│       └── model_comparison.py
+│   ├── config.py                # shared constants (seed, columns, thresholds)
+│   ├── data/                    # cleaning, near-duplicate removal, train/test split
+│   ├── preprocessing/           # fit-on-train pipeline steps, build_pipeline()
+│   ├── models/                  # one builder per model; select_final.py, train_final.py,
+│   │                            # risk_bands.py, model_metadata.py
+│   └── evaluation/              # shared cross-validation harness and logging
 │
-├── models/
-│   ├── baseline/
-│   ├── tuned/
-│   └── final/
+├── models/final/                # final_pipeline.joblib + metadata.json
 │
 ├── experiments/
-│   ├── results/
+│   ├── results/                 # experiment tables, selection.json, out-of-fold predictions
 │   └── figures/
 │
 ├── backend/
-│   ├── app.py
-│   └── routes/
-│       └── prediction.py
+│   ├── app.py                   # FastAPI app, serves the API and the web page
+│   ├── routes/prediction.py     # /health, /schema, /examples, /predict
+│   ├── model_store.py           # loads the model and metadata
+│   ├── adapter.py               # form fields -> the model's columns
+│   ├── validation.py            # checks an application against the saved schema
+│   ├── messages.py              # labels, suggested actions, disclaimer
+│   └── examples.py              # demo applicants (examples.json)
 │
 ├── frontend/
-│   ├── index.html
-│   ├── style.css
-│   └── script.js
+│   ├── src/                     # React components
+│   └── dist/                    # built page served by the backend
 │
 ├── reports/
-│   ├── dataset_proposal/
-│   ├── technical_report/
-│   └── presentation/
-│
 ├── tests/
-│
 ├── requirements.txt
-├── .gitignore
 └── README.md
+```
 
 ## Understanding the Structure
 
@@ -166,7 +213,7 @@ FDM-AutoMobile_Loan_Default_Modelling/
 
 The easiest way to think about it is as **one pipeline**:
 
-
+```text
                     DATA
                      │
                      ▼

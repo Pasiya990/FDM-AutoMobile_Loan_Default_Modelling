@@ -135,6 +135,20 @@ def test_single_new_row_matches_batch_columns(fitted_pipeline):
     assert single.isnull().sum().sum() == 0
 
 
+def test_single_rows_are_transformed_exactly_like_the_batch(fitted_pipeline):
+    # The backend scores one applicant at a time, so a row must get the same
+    # features alone as inside a batch. One-hot encoding once dropped a row's
+    # own category when it was scored alone, setting every dummy to 0.
+    pipe, _, X_test, *_ = fitted_pipeline
+    rows = X_test.iloc[:20]
+    batch = pipe[:-1].transform(rows)
+    for i in range(len(rows)):
+        single = pipe[:-1].transform(rows.iloc[[i]])
+        np.testing.assert_allclose(
+            single.to_numpy(dtype=float), batch.iloc[[i]].to_numpy(dtype=float), err_msg=f"row {i}"
+        )
+
+
 def test_single_new_row_uses_train_statistics_not_its_own(fitted_pipeline):
     # The whole point of fit/transform: a lone row has no data to compute a
     # median or a scaler mean from - it must reuse what fit() learned from

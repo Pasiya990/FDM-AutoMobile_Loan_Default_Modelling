@@ -167,7 +167,11 @@ class CategoricalOneHotEncoder(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        X = pd.get_dummies(X, columns=self.cols_to_encode_, drop_first=True)
+        # All dummies, then keep exactly the columns learned in fit. Dropping a
+        # "first" category here would depend on which categories this batch
+        # contains: for a single row it dropped the row's own category, so every
+        # dummy became 0. fit() still decides which reference category is left out.
+        X = pd.get_dummies(X, columns=self.cols_to_encode_, drop_first=False)
         X = X.reindex(columns=self.output_columns_, fill_value=0)
         dummy_cols = [c for c in X.columns if X[c].dtype == bool]
         X[dummy_cols] = X[dummy_cols].astype(int)
