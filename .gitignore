@@ -54,3 +54,5 @@ models/**/*.joblib
 # Claude Code
 .claude/
 CLAUDE.md
+# FRONTEND
+frontend/node_modules/
