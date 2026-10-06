@@ -1,4 +1,5 @@
-"""Row-level cleaning: fix dtypes, remove duplicates, fix sentinel/placeholder
+"""Row-level cleaning: fix dtypes, remove exact and near-duplicate applicants
+(src/data/near_duplicates.py), fix sentinel/placeholder
 values, and split into train/test. These steps run once, before the split,
 because they either change the row count (duplicates) or are fixed,
 data-independent rules (not fit on train) - see notebooks/03_data_preprocessing.ipynb
@@ -25,6 +26,7 @@ from src.config import (
     SENTINEL_VALUE,
     TARGET,
 )
+from src.data.near_duplicates import remove_near_duplicate_rows
 
 
 def load_raw_data(path: Path = RAW_DATA_PATH) -> pd.DataFrame:
@@ -78,10 +80,19 @@ def split_train_test(
     return train_test_split(df, test_size=test_size, stratify=df[TARGET], random_state=random_state)
 
 
-def clean_and_split(path: Path = RAW_DATA_PATH) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Convenience wrapper chaining every row-level step, in order."""
+def clean_and_split(
+    path: Path = RAW_DATA_PATH, drop_near_duplicates: bool = True
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Convenience wrapper chaining every row-level step, in order.
+
+    drop_near_duplicates=False reproduces the original split, in which ~16%
+    of test applicants also appear (as a near-copy) in train - kept only to
+    show how much that leakage inflated the earlier results.
+    """
     df = load_raw_data(path)
     df = fix_dtypes(df)
     df = remove_duplicate_rows(df)
+    if drop_near_duplicates:
+        df = remove_near_duplicate_rows(df)
     df = apply_sentinel_and_placeholder_fixes(df)
     return split_train_test(df)

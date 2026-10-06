@@ -1,6 +1,10 @@
-"""Fits the final Random Forest on the full training split, evaluates it ONCE
-on the held-out test set at the chosen operating threshold, and saves the
-fitted pipeline and its metadata to models/final/.
+"""Fits the final model on the full training split, evaluates it ONCE on the
+held-out test set at the chosen operating threshold, and saves the fitted
+pipeline and its metadata to models/final/.
+
+The model, its parameters and its threshold come from
+experiments/results/fair_comparison/dedup/selection.json, written by
+src/models/fair_comparison.py (selection on cross-validation only).
 
 The test set is used here and nowhere else for model selection. To stop it
 being reused by accident, the script refuses to run again once
@@ -21,17 +25,17 @@ import joblib
 import numpy as np
 import pandas as pd
 import sklearn
+import xgboost
 from sklearn.metrics import average_precision_score, confusion_matrix, f1_score, roc_auc_score
 
 from src.config import RANDOM_STATE, TARGET
 from src.data.data_cleaning import clean_and_split
-from src.models.random_forest import build_random_forest_pipeline
+from src.models.fair_comparison import SELECTION_PATH, build_rf, spw_for
+from src.models.xgboost_model import build_xgboost
+from src.preprocessing.feature_engineering import build_pipeline
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FINAL_DIR = PROJECT_ROOT / "models" / "final"
-RESULTS_DIR = PROJECT_ROOT / "experiments" / "results"
-THRESHOLD_PATH = RESULTS_DIR / "random_forest_operating_threshold.csv"
-EXPERIMENTS_PATH = RESULTS_DIR / "experiments.csv"
 
 MODEL_FILE = "final_pipeline.joblib"
 METADATA_FILE = "metadata.json"
@@ -55,7 +59,16 @@ def evaluate_at_threshold(y_true, proba, threshold):
     }
 
 
-def train_final(output_dir=FINAL_DIR, threshold_path=THRESHOLD_PATH, force=False):
+def build_selected_model(selection, y_train):
+    """The estimator named in selection.json, with its selected parameters."""
+    params = dict(selection["params"])
+    if selection["family"] == "xgboost":
+        spw = spw_for(y_train, params.pop("spw_factor"))
+        return build_xgboost(scale_pos_weight=spw, **params)
+    return build_rf(**params)
+
+
+def train_final(output_dir=FINAL_DIR, selection_path=SELECTION_PATH, force=False):
     output_dir = Path(output_dir)
     metadata_path = output_dir / METADATA_FILE
     if metadata_path.exists() and not force:
@@ -64,40 +77,34 @@ def train_final(output_dir=FINAL_DIR, threshold_path=THRESHOLD_PATH, force=False
             "Re-running would reuse it. Pass force=True (--force) only if that is intended."
         )
 
-    chosen = pd.read_csv(threshold_path).iloc[0]
-    threshold = float(chosen["threshold"])
+    selection = json.loads(Path(selection_path).read_text(encoding="utf-8"))
+    threshold = float(selection["operating_threshold"])
 
     train_df, test_df = clean_and_split()
     X_train, y_train = train_df.drop(columns=[TARGET]), train_df[TARGET]
     X_test, y_test = test_df.drop(columns=[TARGET]), test_df[TARGET]
 
-    pipeline = build_random_forest_pipeline()
+    pipeline = build_pipeline(build_selected_model(selection, y_train))
     pipeline.fit(X_train, y_train)
 
     test_proba = pipeline.predict_proba(X_test)[:, 1]
     test_metrics = evaluate_at_threshold(y_test, test_proba, threshold)
 
-    cv = pd.read_csv(EXPERIMENTS_PATH).set_index("model_name").loc["random_forest"]
     metadata = {
-        "model": "random_forest",
-        "description": "Untuned Random Forest (300 trees, balanced class weights) inside the shared pipeline",
+        "model": selection["model"],
+        "params": selection["params"],
+        "selected_by": selection["selected_by"],
         "trained_on": date.today().isoformat(),
         "random_state": RANDOM_STATE,
         "train_rows": int(len(X_train)),
         "input_columns": list(X_train.columns),
         "operating_threshold": threshold,
-        "target_recall": float(chosen["target_recall"]),
+        "target_recall": float(selection["target_recall"]),
         "cv_reference": {
-            "roc_auc_mean": float(cv["roc_auc_mean"]),
-            "roc_auc_std": float(cv["roc_auc_std"]),
-            "pr_auc_mean": float(cv["pr_auc_mean"]),
-            "note": "5-fold stratified CV on the training split at threshold 0.5",
+            **selection["cv_reference"],
+            "note": "5-fold stratified CV on the leak-free training split (near-duplicate applicants removed)",
         },
-        "oof_at_threshold": {
-            "recall": float(chosen["oof_recall"]),
-            "precision": float(chosen["oof_precision"]),
-            "share_flagged": float(chosen["share_flagged"]),
-        },
+        "oof_at_threshold": selection["oof_at_threshold"],
         "test_set": test_metrics,
         "libraries": {
             "python": platform.python_version(),
@@ -105,6 +112,7 @@ def train_final(output_dir=FINAL_DIR, threshold_path=THRESHOLD_PATH, force=False
             "pandas": pd.__version__,
             "numpy": np.__version__,
             "joblib": joblib.__version__,
+            "xgboost": xgboost.__version__,
         },
     }
 
