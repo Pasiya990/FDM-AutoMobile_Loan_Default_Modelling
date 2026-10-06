@@ -63,3 +63,9 @@ RARE_CATEGORY_MIN_FREQ = 0.01
 
 # RandomForest importance below this threshold -> feature dropped
 LOW_IMPORTANCE_THRESHOLD = 0.001
+
+# Risk bands on the model's risk score. "High" starts at the operating
+# threshold saved with the model (metadata.json), so High means "flagged".
+# "Low" is every score below this value; the rest is "Medium". Chosen from the
+# out-of-fold training predictions, see src/models/risk_bands.py.
+LOW_RISK_UPPER_BOUND = 0.25
