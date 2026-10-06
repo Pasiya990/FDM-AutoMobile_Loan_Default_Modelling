@@ -1,6 +1,6 @@
 parameter,value
 model__n_estimators,500
-model__min_samples_leaf,1
+model__min_samples_leaf,20
 model__max_features,sqrt
-model__max_depth,20
-model__class_weight,balanced
+model__max_depth,12
+model__class_weight,balanced_subsample

@@ -42,10 +42,11 @@ def fitted_pipeline(cleaned_split):
 
 def test_clean_and_split_reproduces_known_shape(cleaned_split):
     train_df, test_df = cleaned_split
-    # 121,856 raw rows - 2,640 exact duplicates (ignoring ID) = 119,216
-    assert train_df.shape[0] + test_df.shape[0] == 119216
-    assert train_df.shape[0] == 95372
-    assert test_df.shape[0] == 23844
+    # 121,856 raw rows - 2,640 exact duplicates (ignoring ID)
+    # - 12,020 near-duplicate applicant copies = 107,196
+    assert train_df.shape[0] + test_df.shape[0] == 107196
+    assert train_df.shape[0] == 85756
+    assert test_df.shape[0] == 21440
 
 
 def test_split_is_stratified(cleaned_split):
