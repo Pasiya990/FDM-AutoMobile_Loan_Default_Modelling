@@ -31,6 +31,7 @@ from sklearn.metrics import average_precision_score, confusion_matrix, f1_score,
 from src.config import RANDOM_STATE, TARGET
 from src.data.data_cleaning import clean_and_split
 from src.models.fair_comparison import SELECTION_PATH, build_rf, spw_for
+from src.models.model_metadata import serving_info
 from src.models.xgboost_model import build_xgboost
 from src.preprocessing.feature_engineering import build_pipeline
 
@@ -99,6 +100,7 @@ def train_final(output_dir=FINAL_DIR, selection_path=SELECTION_PATH, force=False
         "train_rows": int(len(X_train)),
         "input_columns": list(X_train.columns),
         "operating_threshold": threshold,
+        **serving_info(X_train, threshold),
         "target_recall": float(selection["target_recall"]),
         "cv_reference": {
             **selection["cv_reference"],
