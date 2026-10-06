@@ -3,8 +3,11 @@
   --muted: #52606d;
   --background: #f5f7fa;
   --surface: #ffffff;
-  --border: #d9e2ec;
+  --border: #cbd2d9;
+  --accent: #1f5f99;
+  --accent-text: #ffffff;
   --error: #b42318;
+  --error-background: #fef3f2;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
   background: var(--background);
@@ -15,7 +18,7 @@ body {
 }
 
 .page {
-  max-width: 960px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: 24px 16px 48px;
 }
@@ -25,12 +28,14 @@ header h1 {
   font-size: 1.6rem;
 }
 
-header p {
-  margin: 0 0 24px;
+header p,
+.status {
+  margin: 0 0 16px;
   color: var(--muted);
 }
 
 .message {
+  margin: 16px 0;
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -39,5 +44,111 @@ header p {
 
 .message.error {
   border-color: var(--error);
+  background: var(--error-background);
   color: var(--error);
+}
+
+/* ---------------------------------------------------------------- form */
+.section {
+  margin: 0 0 16px;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.section legend,
+.section summary {
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.section summary {
+  cursor: pointer;
+}
+
+.section-note {
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field label {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.required {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.field input,
+.field select {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.field input:focus,
+.field select:focus,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.help {
+  color: var(--muted);
+}
+
+.has-error input,
+.has-error select {
+  border-color: var(--error);
+}
+
+.field-error {
+  color: var(--error);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 10px 20px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }

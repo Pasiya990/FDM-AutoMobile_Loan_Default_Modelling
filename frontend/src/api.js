@@ -12,10 +12,29 @@ async function request(path, options) {
   if (response.status === 503) {
     throw new Error(body?.message || "The model is not available on the server.");
   }
+  if (response.status >= 500) {
+    throw new Error("The prediction service had a problem. Please try again.");
+  }
   return { status: response.status, body };
 }
 
 export async function getHealth() {
-  const { body } = await request("/health");
-  return body;
+  return (await request("/health")).body;
+}
+
+export async function getSchema() {
+  return (await request("/schema")).body;
+}
+
+export async function getExamples() {
+  return (await request("/examples")).body ?? [];
+}
+
+// Returns {status, body}: 200 with the result, or 422 with per-field details
+export async function predict(application) {
+  return request("/predict", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(application),
+  });
 }
