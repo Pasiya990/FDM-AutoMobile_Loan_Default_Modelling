@@ -24,27 +24,47 @@ export function fromApplication(application, specs) {
   return values;
 }
 
+const isBlank = (raw) => raw === undefined || raw === null || raw === "";
+
+// Fields that are switched off by another answer, and the answer that switches them off
+export const DISABLED_WHEN = {
+  years_employed: { field: "not_employed", value: "yes" },
+  car_age: { field: "car_owned", value: "no" },
+};
+
+export function isDisabled(field, values) {
+  const rule = DISABLED_WHEN[field];
+  return Boolean(rule) && values[rule.field] === rule.value;
+}
+
+// The problem with one field, or undefined
+export function checkField(field, values, specs) {
+  const spec = specs[field];
+  const raw = values[field];
+  if (!spec) return undefined;
+
+  if (isBlank(raw)) {
+    if (spec.required) return "Required.";
+    if (field === "years_employed" && values.not_employed === "no") return "Required when the applicant is employed.";
+    return undefined;
+  }
+  if (isDisabled(field, values)) {
+    return field === "car_age" ? "Leave blank when the applicant has no car." : undefined;
+  }
+  if (spec.type === "integer" || spec.type === "number") {
+    const number = Number(raw);
+    if (!Number.isFinite(number)) return "Enter a number.";
+    if (spec.type === "integer" && !Number.isInteger(number)) return "Enter a whole number.";
+    if (number < spec.min || number > spec.max) return `Must be between ${spec.min} and ${spec.max}.`;
+  }
+  return undefined;
+}
+
 export function checkValues(values, specs) {
   const errors = {};
-  for (const [field, spec] of Object.entries(specs)) {
-    const raw = values[field];
-    const blank = raw === undefined || raw === "";
-    if (blank) {
-      if (spec.required) errors[field] = "Required.";
-      continue;
-    }
-    if (spec.type === "integer" || spec.type === "number") {
-      const number = Number(raw);
-      if (!Number.isFinite(number)) errors[field] = "Enter a number.";
-      else if (spec.type === "integer" && !Number.isInteger(number)) errors[field] = "Enter a whole number.";
-      else if (number < spec.min || number > spec.max) errors[field] = `Must be between ${spec.min} and ${spec.max}.`;
-    }
-  }
-  if (values.not_employed === "no" && (values.years_employed ?? "") === "") {
-    errors.years_employed = "Required when the applicant is employed.";
-  }
-  if (values.car_owned === "no" && (values.car_age ?? "") !== "") {
-    errors.car_age = "Leave blank when the applicant has no car.";
+  for (const field of Object.keys(specs)) {
+    const problem = checkField(field, values, specs);
+    if (problem) errors[field] = problem;
   }
   return errors;
 }

@@ -1,7 +1,11 @@
+import ErrorSummary from "./ErrorSummary.jsx";
 import Field from "./Field.jsx";
 import { FIELDS, SECTIONS } from "./fields.js";
+import { isDisabled } from "./formValues.js";
 
-export default function ApplicationForm({ specs, values, errors, onChange, onSubmit, onClear, busy }) {
+export default function ApplicationForm({
+  specs, values, errors, showSummary, summaryRef, onChange, onBlur, onSubmit, onClear, busy,
+}) {
   const sectionOf = (field) => FIELDS[field]?.section ?? "applicant";
 
   return (
@@ -13,6 +17,8 @@ export default function ApplicationForm({ specs, values, errors, onChange, onSub
         onSubmit();
       }}
     >
+      {showSummary && <ErrorSummary errors={errors} ref={summaryRef} />}
+
       {SECTIONS.map((section) => {
         const fields = Object.keys(FIELDS).filter((field) => specs[field] && sectionOf(field) === section.id);
         const body = (
@@ -26,7 +32,9 @@ export default function ApplicationForm({ specs, values, errors, onChange, onSub
                   spec={specs[field]}
                   value={values[field]}
                   error={errors[field]}
+                  disabled={isDisabled(field, values)}
                   onChange={onChange}
+                  onBlur={onBlur}
                 />
               ))}
             </div>
@@ -45,11 +53,6 @@ export default function ApplicationForm({ specs, values, errors, onChange, onSub
         );
       })}
 
-      {errors._form && (
-        <p className="message error" role="alert">
-          {errors._form}
-        </p>
-      )}
       <div className="form-actions">
         <button type="submit" disabled={busy}>
           {busy ? "Checking..." : "Check risk"}

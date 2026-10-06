@@ -6,7 +6,7 @@ function hint(spec) {
   return `Typical: ${formatNumber(spec.typical_min)} to ${formatNumber(spec.typical_max)}`;
 }
 
-export default function Field({ name, spec, value, error, onChange }) {
+export default function Field({ name, spec, value, error, disabled, onChange, onBlur }) {
   const info = FIELDS[name] ?? { label: name };
   const id = `field-${name}`;
   const describedBy = error ? `${id}-error` : undefined;
@@ -15,6 +15,8 @@ export default function Field({ name, spec, value, error, onChange }) {
     name,
     value: value ?? "",
     onChange: (event) => onChange(name, event.target.value),
+    onBlur: () => onBlur(name),
+    disabled,
     "aria-invalid": error ? "true" : undefined,
     "aria-describedby": describedBy,
   };
@@ -74,7 +76,7 @@ export default function Field({ name, spec, value, error, onChange }) {
 
   const helpText = [info.help, hint(spec)].filter(Boolean).join(" ");
   return (
-    <div className={`field${error ? " has-error" : ""}`}>
+    <div className={`field${error ? " has-error" : ""}${disabled ? " is-disabled" : ""}`}>
       <label htmlFor={id}>
         {info.label}
         {spec.required && <span className="required"> (required)</span>}
