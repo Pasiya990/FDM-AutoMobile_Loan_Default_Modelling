@@ -514,3 +514,137 @@ footer {
 .is-disabled label {
   color: var(--muted);
 }
+
+/* ---------------------------------------------------------------- two-column workspace */
+.workspace {
+  display: grid;
+  gap: 24px;
+}
+
+.result-placeholder {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .page {
+    max-width: 1320px;
+  }
+
+  /* Form on the left, result on the right and always in view */
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    align-items: start;
+  }
+
+  .result-column {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+
+  .result-anchor {
+    margin-top: 0;
+  }
+
+  .result-placeholder {
+    display: block;
+    margin: 0;
+    padding: 24px 16px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* The narrower result column stacks the factor rows */
+  .factors li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .factor-bar-track {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}
+
+/* ---------------------------------------------------------------- result additions */
+.summary-sentence {
+  margin: 12px 0 4px;
+  font-size: 1.05rem;
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.print-only {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- printed summary */
+@media print {
+  :root {
+    background: #ffffff;
+  }
+
+  .guides,
+  .examples,
+  .application-form,
+  .result-actions,
+  .result-placeholder,
+  footer,
+  header p {
+    display: none !important;
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .workspace {
+    display: block;
+  }
+
+  .result-column {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .result {
+    border-color: #000000;
+  }
+
+  .print-only {
+    display: block;
+  }
+
+  .print-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 24px;
+    margin: 0;
+    font-size: 0.85rem;
+  }
+
+  .print-details div {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px solid #dddddd;
+  }
+
+  .print-details dd {
+    margin: 0;
+    font-weight: 600;
+  }
+}
+
+.workspace .result-anchor {
+  margin-top: 0;
+}

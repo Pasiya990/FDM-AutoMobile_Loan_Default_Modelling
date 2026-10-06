@@ -63,3 +63,15 @@ def test_risk_bands_follow_the_operating_threshold():
     assert bands["low_upper_bound"] == 0.25
     assert bands["high_lower_bound"] == 0.52
     assert bands["labels"] == ["Low", "Medium", "High"]
+
+
+def test_band_outcomes_come_from_the_out_of_fold_predictions(tmp_path):
+    path = tmp_path / "oof.csv"
+    pd.DataFrame({"y_true": [0, 0, 0, 1, 0, 1], "xgboost_tuned": [0.1, 0.2, 0.3, 0.4, 0.6, 0.7]}).to_csv(path, index=False)
+
+    bands = build_risk_bands(0.52, path)
+
+    assert bands["outcomes"]["Low"] == {"share_of_applicants": pytest.approx(2 / 6, abs=1e-4), "default_rate": 0.0}
+    assert bands["outcomes"]["Medium"]["default_rate"] == 0.5
+    assert bands["outcomes"]["High"]["default_rate"] == 0.5
+    assert "outcomes" not in build_risk_bands(0.52, tmp_path / "missing.csv")

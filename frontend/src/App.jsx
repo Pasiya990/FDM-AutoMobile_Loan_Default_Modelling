@@ -3,6 +3,7 @@ import ApplicationForm from "./ApplicationForm.jsx";
 import { AboutModel, HowToUse } from "./Guide.jsx";
 import ResultPanel from "./ResultPanel.jsx";
 import { getExamples, getHealth, getSchema, predict } from "./api.js";
+import { FIELDS, WEEKDAYS, valueLabel } from "./fields.js";
 import { DISABLED_WHEN, apiErrors, checkField, checkValues, fromApplication, toApplication } from "./formValues.js";
 
 const DISCLAIMER =
@@ -104,6 +105,26 @@ export default function App() {
     setResult(null);
   }
 
+  function startNewApplication() {
+    handleClear();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById("field-age_years")?.focus({ preventScroll: true });
+  }
+
+  // The details entered, in form order and readable form, for the printed summary
+  function enteredDetails() {
+    return Object.keys(FIELDS)
+      .filter((field) => (values[field] ?? "") !== "")
+      .map((field) => {
+        const raw = values[field];
+        let shown = valueLabel(field, raw);
+        if (field === "not_employed") shown = raw === "yes" ? "Not employed or retired" : "Employed";
+        else if (FIELDS[field].kind === "weekday") shown = WEEKDAYS[Number(raw)];
+        else if (raw === "yes" || raw === "no") shown = raw === "yes" ? "Yes" : "No";
+        return { label: FIELDS[field].label, value: shown };
+      });
+  }
+
   return (
     <main className="page">
       <header>
@@ -142,24 +163,37 @@ export default function App() {
             </div>
           )}
 
-          <ApplicationForm
-            specs={schema.fields}
-            values={values}
-            errors={errors}
-            showSummary={showSummary}
-            summaryRef={summaryRef}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            onSubmit={handleSubmit}
-            onClear={handleClear}
-            busy={busy}
-          />
+          <div className="workspace">
+            <ApplicationForm
+              specs={schema.fields}
+              values={values}
+              errors={errors}
+              showSummary={showSummary}
+              summaryRef={summaryRef}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              onSubmit={handleSubmit}
+              onClear={handleClear}
+              busy={busy}
+            />
 
-          {result && (
-            <div ref={resultRef} tabIndex={-1} className="result-anchor">
-              <ResultPanel result={result} bands={schema.risk_bands} />
-            </div>
-          )}
+            <aside className="result-column" aria-label="Result">
+              {result ? (
+                <div ref={resultRef} tabIndex={-1} className="result-anchor">
+                  <ResultPanel
+                    result={result}
+                    bands={schema.risk_bands}
+                    details={enteredDetails()}
+                    onNewApplication={startNewApplication}
+                  />
+                </div>
+              ) : (
+                <p className="result-placeholder">
+                  {busy ? "Checking the application..." : "Fill in the form and press Check risk. The result appears here."}
+                </p>
+              )}
+            </aside>
+          </div>
         </>
       )}
 

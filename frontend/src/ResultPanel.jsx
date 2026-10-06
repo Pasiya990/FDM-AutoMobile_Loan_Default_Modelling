@@ -20,6 +20,15 @@ function explanation(result, bands) {
   return `The risk score is below ${low}, the low-risk range.`;
 }
 
+// "About 18 in every 100 past applicants in this band defaulted (roughly 1 in 6)."
+function pastOutcome(band, bands) {
+  const outcome = bands.outcomes?.[band];
+  if (!outcome || !outcome.default_rate) return null;
+  const perHundred = Math.round(outcome.default_rate * 100);
+  const oneIn = Math.round(1 / outcome.default_rate);
+  return `About ${perHundred} in every 100 past applicants in this band defaulted (roughly 1 in ${oneIn}).`;
+}
+
 function ScoreScale({ score, bands }) {
   const low = bands.low_upper_bound * 100;
   const high = bands.high_lower_bound * 100;
@@ -41,7 +50,7 @@ function ScoreScale({ score, bands }) {
   );
 }
 
-export default function ResultPanel({ result, bands }) {
+export default function ResultPanel({ result, bands, details, onNewApplication }) {
   const band = result.risk_band.toLowerCase();
   const largest = Math.max(...result.top_factors.map((factor) => Math.abs(factor.impact)), 1e-9);
   return (
@@ -50,6 +59,11 @@ export default function ResultPanel({ result, bands }) {
         <h2 id="result-title">{result.prediction}</h2>
         <span className={`badge badge-${band}`}>{BAND_TEXT[result.risk_band]}</span>
       </div>
+
+      <p className="summary-sentence">
+        This applicant is in the <strong>{BAND_TEXT[result.risk_band].toLowerCase()}</strong> band.{" "}
+        {pastOutcome(result.risk_band, bands)}
+      </p>
 
       <p className="score-line">
         Risk score <strong>{result.risk_score.toFixed(2)}</strong>
@@ -90,6 +104,31 @@ export default function ResultPanel({ result, bands }) {
           </p>
         </>
       )}
+
+      <div className="print-only">
+        <h3>Application details entered</h3>
+        <dl className="print-details">
+          {details.map(({ label, value }) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="result-note">
+          Decision support only: this result must not be used to refuse an application automatically. Printed{" "}
+          {new Date().toLocaleString()}.
+        </p>
+      </div>
+
+      <div className="result-actions">
+        <button type="button" onClick={() => window.print()}>
+          Print summary
+        </button>
+        <button type="button" className="secondary" onClick={onNewApplication}>
+          Start a new application
+        </button>
+      </div>
 
       <p className="result-note">
         The risk score ranks applicants from lower to higher risk; it is not the chance of default. Model{" "}

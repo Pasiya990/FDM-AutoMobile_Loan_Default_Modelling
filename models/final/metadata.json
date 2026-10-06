@@ -481,6 +481,21 @@
       "Low",
       "Medium",
       "High"
-    ]
+    ],
+    "outcomes": {
+      "Low": {
+        "share_of_applicants": 0.2838,
+        "default_rate": 0.0229
+      },
+      "Medium": {
+        "share_of_applicants": 0.446,
+        "default_rate": 0.058
+      },
+      "High": {
+        "share_of_applicants": 0.2702,
+        "default_rate": 0.1798
+      }
+    },
+    "outcomes_source": "out-of-fold predictions on the training split"
   }
 }
