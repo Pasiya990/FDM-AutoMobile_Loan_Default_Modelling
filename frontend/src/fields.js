@@ -21,20 +21,19 @@ export const SECTIONS = [
     id: "timing",
     title: "Application time",
     note: "Filled in automatically from the submission time if left blank.",
-    collapsed: true,
   },
 ];
 
 export const FIELDS = {
   age_years: { section: "key", label: "Age (years)" },
-  client_income: { section: "key", label: "Income", help: "The applicant's income." },
+  client_income: { section: "key", label: "Income", help: "The applicant's income.", prefix: "AMT" },
   contract_type: {
     section: "key",
     label: "Contract type",
     values: { CL: "Cash loan", RL: "Revolving loan" },
   },
-  credit_amount: { section: "key", label: "Credit amount", help: "Total amount of the loan." },
-  loan_annuity: { section: "key", label: "Loan annuity", help: "The regular repayment amount." },
+  credit_amount: { section: "key", label: "Credit amount", help: "Total amount of the loan.", prefix: "AMT" },
+  loan_annuity: { section: "key", label: "Loan annuity", help: "The regular repayment amount.", prefix: "AMT" },
   not_employed: { section: "key", label: "Employment status", kind: "employment" },
   years_employed: { section: "key", label: "Years in current job", help: "Needed when employed." },
 
