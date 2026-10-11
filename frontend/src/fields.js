@@ -84,8 +84,16 @@ export const FIELDS = {
   },
   population_region_relative: {
     section: "contact",
-    label: "Region population (relative)",
-    help: "How populated the applicant's region is, on the data's scale.",
+    label: "Region type",
+    kind: "choice",
+    help: "How populated the applicant's home region is. Choose the closest, or leave as Not given.",
+    // values from the training data: 25th percentile, median, 75th percentile, a common big-city value
+    values: {
+      "0.01": "Small or rural region",
+      "0.019": "Average region",
+      "0.029": "Larger town",
+      "0.046": "Big city",
+    },
   },
   city_rating: { section: "contact", label: "City rating", help: "1, 2 or 3, as rated in the data." },
 
@@ -99,7 +107,15 @@ export const FIELDS = {
   social_circle_default: {
     section: "bureau",
     label: "Defaults in social circle",
-    help: "Share of the applicant's contacts who defaulted, from 0 to 1.",
+    kind: "choice",
+    help: "Only if the credit bureau report shows it. Leave as Not given otherwise.",
+    // the data stores a share from 0 to 1 (half of applicants blank); each choice sends a
+    // typical value of that range in the training data, 0.09 being the overall median
+    values: {
+      "0.03": "Low (under 5%)",
+      "0.09": "Moderate (5% to 15%)",
+      "0.22": "High (over 15%)",
+    },
   },
   credit_bureau_enquiries: {
     section: "bureau",
