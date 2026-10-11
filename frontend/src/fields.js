@@ -107,7 +107,15 @@ export const FIELDS = {
   social_circle_default: {
     section: "bureau",
     label: "Defaults in social circle",
-    help: "Share of the applicant's contacts who defaulted, from 0 to 1.",
+    kind: "choice",
+    help: "Only if the credit bureau report shows it. Leave as Not given otherwise.",
+    // the data stores a share from 0 to 1 (half of applicants blank); each choice sends a
+    // typical value of that range in the training data, 0.09 being the overall median
+    values: {
+      "0.03": "Low (under 5%)",
+      "0.09": "Moderate (5% to 15%)",
+      "0.22": "High (over 15%)",
+    },
   },
   credit_bureau_enquiries: {
     section: "bureau",
