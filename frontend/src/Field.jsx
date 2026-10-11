@@ -30,6 +30,21 @@ export default function Field({ name, spec, value, error, warning, disabled, onC
         <option value="yes">Not employed or retired</option>
       </select>
     );
+  } else if (info.kind === "choice") {
+    // Preset values; a value recorded in the data that matches none of them (an example applicant) is kept as is
+    const presets = Object.entries(info.values);
+    const recorded = value && !info.values[value] ? value : null;
+    input = (
+      <select {...common}>
+        <option value="">Not given</option>
+        {recorded && <option value={recorded}>{`Recorded value (${Number(recorded).toPrecision(3)})`}</option>}
+        {presets.map(([optionValue, label]) => (
+          <option key={optionValue} value={optionValue}>
+            {label}
+          </option>
+        ))}
+      </select>
+    );
   } else if (info.kind === "weekday") {
     input = (
       <select {...common}>
@@ -84,7 +99,7 @@ export default function Field({ name, spec, value, error, warning, disabled, onC
     }
   }
 
-  const typical = hint(spec);
+  const typical = info.kind === "choice" ? null : hint(spec);
   return (
     <div className={`field${error ? " has-error" : ""}${warning && !error ? " has-warning" : ""}${disabled ? " is-disabled" : ""}`}>
       <label htmlFor={id}>

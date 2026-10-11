@@ -84,8 +84,16 @@ export const FIELDS = {
   },
   population_region_relative: {
     section: "contact",
-    label: "Region population (relative)",
-    help: "How populated the applicant's region is, on the data's scale.",
+    label: "Region type",
+    kind: "choice",
+    help: "How populated the applicant's home region is. Choose the closest, or leave as Not given.",
+    // values from the training data: 25th percentile, median, 75th percentile, a common big-city value
+    values: {
+      "0.01": "Small or rural region",
+      "0.019": "Average region",
+      "0.029": "Larger town",
+      "0.046": "Big city",
+    },
   },
   city_rating: { section: "contact", label: "City rating", help: "1, 2 or 3, as rated in the data." },
 
